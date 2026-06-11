@@ -7,6 +7,7 @@
     ArrowRight,
     ArrowUp,
     Clock,
+    Download,
     DollarSign,
     Eye,
     Globe,
@@ -19,6 +20,7 @@
     RotateCcw,
     StickyNote,
     Trash2,
+    Upload,
     Utensils,
     X,
   } from '@lucide/svelte';
@@ -59,7 +61,15 @@
     sections: MenuSection[];
   };
 
+  type MenuDraftFile = {
+    app: 'MenuMaker';
+    schemaVersion: 1;
+    exportedAt: string;
+    draft: MenuDraft;
+  };
+
   const storageKey = 'menumaker:draft:v1';
+  const draftFileSchemaVersion = 1;
 
   const createId = () => crypto.randomUUID();
 
@@ -211,6 +221,9 @@
     ],
   });
 
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
   const normalizeLogoPlacement = (placement: unknown): LogoPlacement => {
     if (placement === 'before-eyebrow') return 'above-eyebrow';
     if (placement === 'after-eyebrow') return 'below-eyebrow';
@@ -233,6 +246,14 @@
 
   const normalizeTextField = (value: unknown) => (typeof value === 'string' ? value : '');
 
+  const sanitizeFileName = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+
   const optionalDetailFields = [
     'address',
     'phone',
@@ -244,6 +265,77 @@
     'qrCodeUrl',
     'qrCodeLabel',
   ] as const satisfies readonly (keyof MenuDraft)[];
+
+  const normalizeImportedItem = (value: unknown, itemIndex: number, sectionIndex: number): MenuItem => {
+    if (!isRecord(value)) {
+      throw new Error(`Item ${itemIndex + 1} in section ${sectionIndex + 1} is invalid.`);
+    }
+
+    return {
+      id: normalizeTextField(value.id) || createId(),
+      name: normalizeTextField(value.name),
+      description: normalizeTextField(value.description),
+      price: normalizeTextField(value.price),
+    };
+  };
+
+  const normalizeImportedSection = (value: unknown, sectionIndex: number): MenuSection => {
+    if (!isRecord(value)) {
+      throw new Error(`Section ${sectionIndex + 1} is invalid.`);
+    }
+
+    if (!Array.isArray(value.items)) {
+      throw new Error(`Section ${sectionIndex + 1} is missing an items list.`);
+    }
+
+    const name = normalizeTextField(value.name) || `Section ${sectionIndex + 1}`;
+
+    return {
+      id: normalizeTextField(value.id) || createId(),
+      name,
+      columnSpan: normalizeSectionColumnSpan(value.columnSpan, name),
+      items: value.items.map((item, itemIndex) => normalizeImportedItem(item, itemIndex, sectionIndex)),
+    };
+  };
+
+  const normalizeImportedDraft = (value: unknown): MenuDraft => {
+    if (!isRecord(value)) {
+      throw new Error('Draft data is missing or invalid.');
+    }
+
+    if (!Array.isArray(value.sections) || value.sections.length === 0) {
+      throw new Error('Draft must include at least one section.');
+    }
+
+    const importedMenu: MenuDraft = {
+      ...starterMenu(),
+      name: normalizeTextField(value.name),
+      subtitle: normalizeTextField(value.subtitle),
+      eyebrow: normalizeTextField(value.eyebrow),
+      logoDataUrl: normalizeTextField(value.logoDataUrl),
+      logoName: normalizeTextField(value.logoName),
+      logoPlacement: normalizeLogoPlacement(value.logoPlacement),
+      sections: value.sections.map(normalizeImportedSection),
+    };
+
+    optionalDetailFields.forEach((field) => {
+      importedMenu[field] = normalizeTextField(value[field]);
+    });
+
+    return importedMenu;
+  };
+
+  const parseDraftFile = (value: unknown): MenuDraft => {
+    if (!isRecord(value)) {
+      throw new Error('Choose a valid MenuMaker draft JSON file.');
+    }
+
+    if (value.app !== 'MenuMaker' || value.schemaVersion !== draftFileSchemaVersion) {
+      throw new Error('This draft file is missing a supported MenuMaker schema version.');
+    }
+
+    return normalizeImportedDraft(value.draft);
+  };
 
   const loadMenu = () => {
     if (typeof localStorage === 'undefined') return starterMenu();
@@ -281,6 +373,8 @@
   let previewElement = $state<HTMLDivElement | null>(null);
   let qrCodeDataUrl = $state('');
   let qrCodeError = $state('');
+  let draftFileStatus = $state('');
+  let draftFileError = $state('');
 
   let selectedSection = $derived(
     menu.sections.find((section) => section.id === selectedSectionId) ?? menu.sections[0],
@@ -447,12 +541,67 @@
     menu.logoName = '';
   };
 
+  const exportDraft = () => {
+    const draftFile: MenuDraftFile = {
+      app: 'MenuMaker',
+      schemaVersion: draftFileSchemaVersion,
+      exportedAt: new Date().toISOString(),
+      draft: $state.snapshot(menu),
+    };
+    const serializedDraft = JSON.stringify(draftFile, null, 2);
+    const blob = new Blob([serializedDraft], { type: 'application/json' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const downloadLink = document.createElement('a');
+    const fileName = `${sanitizeFileName(menu.name) || 'menu'}-menumaker-draft.json`;
+
+    downloadLink.href = downloadUrl;
+    downloadLink.download = fileName;
+    document.body.append(downloadLink);
+    downloadLink.click();
+    downloadLink.remove();
+    URL.revokeObjectURL(downloadUrl);
+
+    draftFileError = '';
+    draftFileStatus = `Exported ${fileName}.`;
+  };
+
+  const handleDraftImport = async (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) return;
+
+    try {
+      const parsedFile = JSON.parse(await file.text()) as unknown;
+      const importedDraft = parseDraftFile(parsedFile);
+      const shouldImport = window.confirm('Importing this draft will replace the current menu. Continue?');
+
+      if (!shouldImport) {
+        draftFileError = '';
+        draftFileStatus = 'Import canceled.';
+        return;
+      }
+
+      menu = importedDraft;
+      selectedSectionId = importedDraft.sections[0]?.id ?? '';
+      draftFileError = '';
+      draftFileStatus = `Imported ${file.name}.`;
+    } catch (error) {
+      draftFileStatus = '';
+      draftFileError = error instanceof Error ? error.message : 'Choose a valid MenuMaker draft JSON file.';
+    } finally {
+      input.value = '';
+    }
+  };
+
   const resetMenu = () => {
     const defaultMenu = starterMenu();
     menu = defaultMenu;
     selectedSectionId = defaultMenu.sections[0]?.id ?? '';
     newSectionName = '';
     sectionModalOpen = false;
+    draftFileError = '';
+    draftFileStatus = '';
   };
 
   const printMenu = () => {
@@ -507,11 +656,35 @@
             Create sections, add items, set prices, and watch the printable preview update immediately.
           </p>
         </div>
-        <div class="flex flex-wrap items-end gap-2">
-          <Button color="light" onclick={resetMenu}>
-            <RotateCcw class="mr-2 h-4 w-4" />
-            Reset
-          </Button>
+        <div class="flex flex-col gap-2 sm:items-end">
+          <div class="flex flex-wrap items-end gap-2">
+            <Button color="light" onclick={exportDraft}>
+              <Download class="mr-2 h-4 w-4" />
+              Export draft
+            </Button>
+            <label
+              class="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus-within:ring-4 focus-within:ring-brand-200"
+            >
+              <Upload class="mr-2 h-4 w-4" />
+              Import draft
+              <input class="sr-only" type="file" accept=".json,application/json" onchange={handleDraftImport} />
+            </label>
+            <Button color="light" onclick={resetMenu}>
+              <RotateCcw class="mr-2 h-4 w-4" />
+              Reset
+            </Button>
+          </div>
+
+          {#if draftFileError || draftFileStatus}
+            <p
+              class={`max-w-sm text-left text-sm sm:text-right ${
+                draftFileError ? 'text-red-700' : 'text-slate-600'
+              }`}
+              aria-live="polite"
+            >
+              {draftFileError || draftFileStatus}
+            </p>
+          {/if}
         </div>
       </div>
 
