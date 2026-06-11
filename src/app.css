@@ -51,6 +51,11 @@ textarea {
   border-top: 1px solid #cbd5e1;
 }
 
+.menu-print-footer {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 @media (min-width: 640px) {
   .menu-print-section {
     grid-column: span var(--section-column-span, 2) / span var(--section-column-span, 2);

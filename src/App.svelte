@@ -1,16 +1,23 @@
 <script lang="ts">
-  import { Badge, Button, Modal } from 'flowbite-svelte';
+  import QRCode from 'qrcode';
+  import { Button, Modal } from 'flowbite-svelte';
   import {
     ArrowDown,
     ArrowLeft,
     ArrowRight,
     ArrowUp,
+    Clock,
     DollarSign,
     Eye,
+    Globe,
     Image,
+    MapPin,
+    Phone,
     Plus,
     Printer,
+    QrCode,
     RotateCcw,
+    StickyNote,
     Trash2,
     Utensils,
     X,
@@ -37,6 +44,15 @@
     name: string;
     subtitle: string;
     eyebrow: string;
+    address: string;
+    phone: string;
+    website: string;
+    hours: string;
+    socialHandle: string;
+    footerNote: string;
+    disclaimer: string;
+    qrCodeUrl: string;
+    qrCodeLabel: string;
     logoDataUrl: string;
     logoName: string;
     logoPlacement: LogoPlacement;
@@ -69,6 +85,15 @@
     name: 'Main Street Grill',
     subtitle: 'Small town favorites served fresh',
     eyebrow: "Today's Menu",
+    address: '123 Main Street, Yourtown, USA',
+    phone: '(555) 123-4567',
+    website: 'mainstreetgrill.example',
+    hours: 'Open daily 11 AM - 9 PM',
+    socialHandle: '@mainstreetgrill',
+    footerNote: 'Ask about our daily specials and catering options.',
+    disclaimer: 'Consuming raw or undercooked meats may increase your risk of foodborne illness.',
+    qrCodeUrl: 'https://example.com/order',
+    qrCodeLabel: 'Scan for online ordering',
     logoDataUrl: '',
     logoName: '',
     logoPlacement: 'above-eyebrow',
@@ -206,6 +231,20 @@
     return defaultSectionColumnSpan(sectionName);
   };
 
+  const normalizeTextField = (value: unknown) => (typeof value === 'string' ? value : '');
+
+  const optionalDetailFields = [
+    'address',
+    'phone',
+    'website',
+    'hours',
+    'socialHandle',
+    'footerNote',
+    'disclaimer',
+    'qrCodeUrl',
+    'qrCodeLabel',
+  ] as const satisfies readonly (keyof MenuDraft)[];
+
   const loadMenu = () => {
     if (typeof localStorage === 'undefined') return starterMenu();
 
@@ -214,11 +253,14 @@
       if (!saved) return starterMenu();
 
       const parsedMenu = JSON.parse(saved) as Partial<MenuDraft> & { logoPlacement?: unknown };
-      const loadedMenu = {
+      const loadedMenu: MenuDraft = {
         ...starterMenu(),
         ...parsedMenu,
       };
       loadedMenu.logoPlacement = normalizeLogoPlacement(parsedMenu.logoPlacement);
+      optionalDetailFields.forEach((field) => {
+        loadedMenu[field] = normalizeTextField(parsedMenu[field]);
+      });
       loadedMenu.sections = loadedMenu.sections.map((section) => ({
         ...section,
         columnSpan: normalizeSectionColumnSpan(section.columnSpan, section.name),
@@ -237,6 +279,8 @@
   let newSectionName = $state('');
   let sectionModalOpen = $state(false);
   let previewElement = $state<HTMLDivElement | null>(null);
+  let qrCodeDataUrl = $state('');
+  let qrCodeError = $state('');
 
   let selectedSection = $derived(
     menu.sections.find((section) => section.id === selectedSectionId) ?? menu.sections[0],
@@ -248,6 +292,62 @@
   let hasTopText = $derived(menu.eyebrow.trim().length > 0);
   let hasLogo = $derived(menu.logoDataUrl.length > 0);
   let hasHeaderTopContent = $derived(hasTopText || hasLogo);
+  let hasRestaurantDetails = $derived(
+    menu.address.trim().length > 0 ||
+      menu.phone.trim().length > 0 ||
+      menu.website.trim().length > 0 ||
+      menu.hours.trim().length > 0 ||
+      menu.socialHandle.trim().length > 0,
+  );
+  let hasFooterDetails = $derived(menu.footerNote.trim().length > 0 || menu.disclaimer.trim().length > 0);
+  let hasQrCodeUrl = $derived(menu.qrCodeUrl.trim().length > 0);
+  let hasMenuFooter = $derived(hasFooterDetails || hasQrCodeUrl);
+  let qrCodeCaption = $derived(menu.qrCodeLabel.trim() || 'Scan for more');
+
+  const toWebsiteHref = (value: string) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return '';
+
+    return /^https?:\/\//i.test(trimmedValue) ? trimmedValue : `https://${trimmedValue}`;
+  };
+
+  let websiteHref = $derived(toWebsiteHref(menu.website));
+
+  $effect(() => {
+    const qrCodeUrl = menu.qrCodeUrl.trim();
+
+    if (!qrCodeUrl) {
+      qrCodeDataUrl = '';
+      qrCodeError = '';
+      return;
+    }
+
+    let cancelled = false;
+
+    QRCode.toDataURL(qrCodeUrl, {
+      color: {
+        dark: '#111827',
+        light: '#ffffff',
+      },
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 144,
+    })
+      .then((dataUrl) => {
+        if (cancelled) return;
+        qrCodeDataUrl = dataUrl;
+        qrCodeError = '';
+      })
+      .catch(() => {
+        if (cancelled) return;
+        qrCodeDataUrl = '';
+        qrCodeError = 'QR code unavailable for this link.';
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  });
 
   $effect(() => {
     localStorage.setItem(storageKey, JSON.stringify(menu));
@@ -551,6 +651,128 @@
       </div>
 
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-start gap-3">
+          <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <MapPin class="h-5 w-5" />
+          </span>
+          <div>
+            <h2 class="text-xl font-semibold text-slate-950">Restaurant details</h2>
+            <p class="mt-1 text-sm text-slate-600">Add optional contact details, hours, footer notes, and a QR code.</p>
+          </div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block sm:col-span-2">
+            <span class="text-sm font-medium text-slate-700">Address</span>
+            <textarea
+              class="mt-2 block min-h-20 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+              bind:value={menu.address}
+              placeholder="Street address, city, and state"
+            ></textarea>
+          </label>
+
+          <label class="block">
+            <span class="text-sm font-medium text-slate-700">Phone</span>
+            <div class="relative mt-2">
+              <Phone class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                class="block w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-8 pr-3 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                bind:value={menu.phone}
+                placeholder="(555) 123-4567"
+              />
+            </div>
+          </label>
+
+          <label class="block">
+            <span class="text-sm font-medium text-slate-700">Website</span>
+            <div class="relative mt-2">
+              <Globe class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                class="block w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-8 pr-3 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                bind:value={menu.website}
+                placeholder="example.com"
+              />
+            </div>
+          </label>
+
+          <label class="block">
+            <span class="text-sm font-medium text-slate-700">Hours</span>
+            <div class="relative mt-2">
+              <Clock class="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+              <textarea
+                class="block min-h-20 w-full resize-y rounded-lg border border-slate-300 bg-white py-2.5 pl-8 pr-3 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                bind:value={menu.hours}
+                placeholder="Mon-Fri 11 AM - 9 PM"
+              ></textarea>
+            </div>
+          </label>
+
+          <label class="block">
+            <span class="text-sm font-medium text-slate-700">Social handle</span>
+            <input
+              class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+              bind:value={menu.socialHandle}
+              placeholder="@restaurant"
+            />
+          </label>
+
+          <label class="block sm:col-span-2">
+            <span class="text-sm font-medium text-slate-700">Footer note</span>
+            <textarea
+              class="mt-2 block min-h-20 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+              bind:value={menu.footerNote}
+              placeholder="Ask about catering, reservations, specials..."
+            ></textarea>
+          </label>
+
+          <label class="block sm:col-span-2">
+            <span class="text-sm font-medium text-slate-700">Disclaimer</span>
+            <textarea
+              class="mt-2 block min-h-20 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+              bind:value={menu.disclaimer}
+              placeholder="Allergy note, gratuity note, substitutions policy..."
+            ></textarea>
+          </label>
+
+          <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+            <div class="mb-4 flex items-start gap-3">
+              <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-brand-700 shadow-sm">
+                <QrCode class="h-5 w-5" />
+              </span>
+              <div>
+                <h3 class="text-base font-semibold text-slate-950">QR code</h3>
+                <p class="mt-1 text-sm text-slate-600">Link to online ordering, a website, catering info, or a digital menu.</p>
+              </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block">
+                <span class="text-sm font-medium text-slate-700">QR code link</span>
+                <input
+                  class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                  bind:value={menu.qrCodeUrl}
+                  placeholder="https://example.com/order"
+                />
+              </label>
+
+              <label class="block">
+                <span class="text-sm font-medium text-slate-700">QR code label</span>
+                <input
+                  class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                  bind:value={menu.qrCodeLabel}
+                  placeholder="Scan for online ordering"
+                />
+              </label>
+            </div>
+
+            {#if qrCodeError}
+              <p class="mt-3 text-sm text-red-700">{qrCodeError}</p>
+            {/if}
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 class="text-xl font-semibold text-slate-950">Sections</h2>
@@ -832,6 +1054,45 @@
             {#if menu.subtitle}
               <p class="mt-2 text-sm text-slate-600">{menu.subtitle}</p>
             {/if}
+
+            {#if hasRestaurantDetails}
+              <div class="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs leading-5 text-slate-600">
+                {#if menu.address.trim()}
+                  <span class="inline-flex items-center gap-1.5">
+                    <MapPin class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                    {menu.address}
+                  </span>
+                {/if}
+
+                {#if menu.phone.trim()}
+                  <span class="inline-flex items-center gap-1.5">
+                    <Phone class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                    {menu.phone}
+                  </span>
+                {/if}
+
+                {#if menu.website.trim()}
+                  <a class="inline-flex items-center gap-1.5 text-slate-600 no-underline" href={websiteHref}>
+                    <Globe class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                    {menu.website}
+                  </a>
+                {/if}
+
+                {#if menu.hours.trim()}
+                  <span class="inline-flex items-center gap-1.5">
+                    <Clock class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                    {menu.hours}
+                  </span>
+                {/if}
+
+                {#if menu.socialHandle.trim()}
+                  <span class="inline-flex items-center gap-1.5">
+                    <Globe class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                    {menu.socialHandle}
+                  </span>
+                {/if}
+              </div>
+            {/if}
           </div>
 
           <div class="menu-print-grid mt-6 grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2">
@@ -874,6 +1135,40 @@
               </p>
             {/if}
           </div>
+
+          {#if hasMenuFooter}
+            <div class="menu-print-footer mt-8 border-t border-slate-300 pt-5">
+              <div class={hasQrCodeUrl ? 'grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start' : 'grid gap-4'}>
+                {#if hasFooterDetails}
+                  <div class="space-y-3 text-sm leading-6 text-slate-600">
+                    {#if menu.footerNote.trim()}
+                      <p class="flex gap-2">
+                        <StickyNote class="mt-1 h-4 w-4 shrink-0 text-brand-700" />
+                        <span>{menu.footerNote}</span>
+                      </p>
+                    {/if}
+
+                    {#if menu.disclaimer.trim()}
+                      <p class="text-xs leading-5 text-slate-500">{menu.disclaimer}</p>
+                    {/if}
+                  </div>
+                {/if}
+
+                {#if hasQrCodeUrl}
+                  <div class="justify-self-center rounded-lg border border-slate-200 bg-white p-3 text-center shadow-sm sm:justify-self-end">
+                    {#if qrCodeDataUrl}
+                      <img class="mx-auto h-28 w-28" src={qrCodeDataUrl} alt={qrCodeCaption} />
+                    {:else}
+                      <div class="flex h-28 w-28 items-center justify-center rounded-md border border-dashed border-slate-300 p-3 text-xs text-slate-500">
+                        {qrCodeError || 'Creating QR code...'}
+                      </div>
+                    {/if}
+                    <p class="mt-2 max-w-32 text-xs font-medium leading-4 text-slate-700">{qrCodeCaption}</p>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     </aside>
