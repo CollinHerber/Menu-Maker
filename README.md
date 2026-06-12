@@ -22,6 +22,7 @@ The app is built as a static Svelte 5 site with runes, Tailwind CSS, and Flowbit
 - Editable draft import and export for backups or sharing.
 - CSV import for bulk menu item entry.
 - Browser local autosave.
+- Mobile editor/preview switching and keyboard-visible focus states.
 - Print-focused menu output.
 
 ## Data And Privacy

@@ -39,6 +39,39 @@ textarea {
   font: inherit;
 }
 
+:focus-visible {
+  outline: 3px solid #22a889;
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 100;
+  transform: translateY(-150%);
+  border-radius: 0.5rem;
+  background: #0f172a;
+  color: white;
+  font-weight: 700;
+  padding: 0.75rem 1rem;
+  transition: transform 120ms ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+.menu-editor,
+.menu-preview-column,
+.menu-print-preview {
+  min-width: 0;
+}
+
+.menu-print-preview {
+  overflow-wrap: anywhere;
+}
+
 .menu-print-section {
   grid-column: span 1 / span 1;
 }
