@@ -38,6 +38,7 @@
   type PrintMargin = 'compact' | 'standard' | 'wide';
   type PrintDensity = 'comfortable' | 'compact';
   type EditorPanelId = 'menu' | 'sections' | 'design' | 'print' | 'details';
+  type SectionDropPosition = 'before' | 'after';
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -1322,6 +1323,12 @@
   let csvImportError = $state('');
   let csvImportMode = $state<CsvImportMode>('append');
   let csvPreviewRows = $state<CsvPreviewRow[]>([]);
+  let draggedSectionId = $state('');
+  let sectionDropTargetId = $state('');
+  let sectionDropPosition = $state<SectionDropPosition>('after');
+  let sectionDragPointerId = $state<number | null>(null);
+  let sectionDragMouseActive = $state(false);
+  let sectionDragHandleElement: HTMLElement | null = null;
 
   let selectedSection = $derived(
     menu.sections.find((section) => section.id === selectedSectionId) ?? menu.sections[0],
@@ -1794,6 +1801,150 @@
     [sections[sectionIndex], sections[nextIndex]] = [sections[nextIndex], sections[sectionIndex]];
     menu.sections = sections;
     selectedSectionId = sectionId;
+  };
+
+  const resetSectionDrag = () => {
+    window.removeEventListener('pointermove', handleSectionGripPointerMove);
+    window.removeEventListener('pointerup', handleSectionGripPointerUp);
+    window.removeEventListener('pointercancel', resetSectionDrag);
+    window.removeEventListener('mousemove', handleSectionGripMouseMove);
+    window.removeEventListener('mouseup', handleSectionGripMouseUp);
+    draggedSectionId = '';
+    sectionDropTargetId = '';
+    sectionDropPosition = 'after';
+    sectionDragPointerId = null;
+    sectionDragMouseActive = false;
+    sectionDragHandleElement = null;
+  };
+
+  const startSectionDrag = (sectionId: string) => {
+    draggedSectionId = sectionId;
+    sectionDropTargetId = '';
+    selectedSectionId = sectionId;
+    activeEditorPanel = 'sections';
+  };
+
+  const getSectionDropPosition = (clientY: number, target: HTMLElement): SectionDropPosition => {
+    const bounds = target.getBoundingClientRect();
+
+    return clientY > bounds.top + bounds.height / 2 ? 'after' : 'before';
+  };
+
+  const getSectionDropTarget = (clientX: number, clientY: number) => {
+    const element = document.elementFromPoint(clientX, clientY);
+    const sectionRow = element?.closest<HTMLElement>('[data-section-id]');
+    const sectionId = sectionRow?.dataset.sectionId;
+
+    if (!sectionId || !sectionRow) return null;
+
+    return {
+      sectionId,
+      dropPosition: getSectionDropPosition(clientY, sectionRow),
+    };
+  };
+
+  const moveSectionToPosition = (
+    sectionId: string,
+    targetSectionId: string,
+    dropPosition: SectionDropPosition,
+  ) => {
+    if (sectionId === targetSectionId) return;
+
+    const sourceIndex = menu.sections.findIndex((section) => section.id === sectionId);
+    const targetIndex = menu.sections.findIndex((section) => section.id === targetSectionId);
+
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const sections = [...menu.sections];
+    const [section] = sections.splice(sourceIndex, 1);
+    let insertionIndex = targetIndex + (dropPosition === 'after' ? 1 : 0);
+
+    if (sourceIndex < insertionIndex) {
+      insertionIndex -= 1;
+    }
+
+    sections.splice(insertionIndex, 0, section);
+    menu.sections = sections;
+    selectedSectionId = sectionId;
+  };
+
+  const updateSectionDragTarget = (clientX: number, clientY: number) => {
+    const dropTarget = getSectionDropTarget(clientX, clientY);
+
+    if (!dropTarget || dropTarget.sectionId === draggedSectionId) {
+      sectionDropTargetId = '';
+      return;
+    }
+
+    sectionDropTargetId = dropTarget.sectionId;
+    sectionDropPosition = dropTarget.dropPosition;
+  };
+
+  const finishSectionDrag = (clientX: number, clientY: number) => {
+    const sourceSectionId = draggedSectionId;
+    const dropTarget = getSectionDropTarget(clientX, clientY);
+
+    if (sourceSectionId && dropTarget && dropTarget.sectionId !== sourceSectionId) {
+      moveSectionToPosition(sourceSectionId, dropTarget.sectionId, dropTarget.dropPosition);
+    }
+  };
+
+  const handleSectionGripPointerDown = (event: PointerEvent, sectionId: string) => {
+    if (event.button !== 0 || menu.sections.length <= 1) return;
+
+    startSectionDrag(sectionId);
+    sectionDragPointerId = event.pointerId;
+    sectionDragHandleElement = event.currentTarget as HTMLElement;
+
+    sectionDragHandleElement.setPointerCapture(event.pointerId);
+    window.addEventListener('pointermove', handleSectionGripPointerMove);
+    window.addEventListener('pointerup', handleSectionGripPointerUp);
+    window.addEventListener('pointercancel', resetSectionDrag);
+    event.preventDefault();
+  };
+
+  const handleSectionGripPointerMove = (event: PointerEvent) => {
+    if (!draggedSectionId || sectionDragPointerId !== event.pointerId) return;
+
+    updateSectionDragTarget(event.clientX, event.clientY);
+    event.preventDefault();
+  };
+
+  const handleSectionGripPointerUp = (event: PointerEvent) => {
+    if (!draggedSectionId || sectionDragPointerId !== event.pointerId) return;
+
+    if (sectionDragHandleElement?.hasPointerCapture(event.pointerId)) {
+      sectionDragHandleElement.releasePointerCapture(event.pointerId);
+    }
+
+    finishSectionDrag(event.clientX, event.clientY);
+    event.preventDefault();
+    resetSectionDrag();
+  };
+
+  const handleSectionGripMouseDown = (event: MouseEvent, sectionId: string) => {
+    if (event.button !== 0 || menu.sections.length <= 1 || sectionDragPointerId !== null) return;
+
+    startSectionDrag(sectionId);
+    sectionDragMouseActive = true;
+    window.addEventListener('mousemove', handleSectionGripMouseMove);
+    window.addEventListener('mouseup', handleSectionGripMouseUp);
+    event.preventDefault();
+  };
+
+  const handleSectionGripMouseMove = (event: MouseEvent) => {
+    if (!sectionDragMouseActive || !draggedSectionId) return;
+
+    updateSectionDragTarget(event.clientX, event.clientY);
+    event.preventDefault();
+  };
+
+  const handleSectionGripMouseUp = (event: MouseEvent) => {
+    if (!sectionDragMouseActive || !draggedSectionId) return;
+
+    finishSectionDrag(event.clientX, event.clientY);
+    event.preventDefault();
+    resetSectionDrag();
   };
 
   const addItem = (section: MenuSection) => {
@@ -2857,15 +3008,42 @@
         <div class="grid gap-2" role="list" aria-label="Menu sections">
           {#each menu.sections as section, sectionIndex (section.id)}
             <div
-              class={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border p-2 transition ${
+              class={`relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border p-2 transition ${
                 selectedSection?.id === section.id
                   ? 'border-brand-600 bg-brand-50 shadow-sm'
                   : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+              } ${draggedSectionId === section.id ? 'opacity-60' : ''} ${
+                sectionDropTargetId === section.id && draggedSectionId !== section.id
+                  ? 'ring-2 ring-brand-300 ring-offset-2'
+                  : ''
               }`}
+              data-section-id={section.id}
               role="listitem"
             >
+              {#if sectionDropTargetId === section.id && draggedSectionId !== section.id}
+                <span
+                  class={`pointer-events-none absolute left-2 right-2 h-1 rounded-full bg-brand-500 ${
+                    sectionDropPosition === 'before' ? '-top-1' : '-bottom-1'
+                  }`}
+                ></span>
+              {/if}
+
               <div class="flex items-center gap-2 text-slate-400">
-                <GripVertical class="h-5 w-5" aria-hidden="true" />
+                <button
+                  aria-label={`Drag ${section.name || 'section'} to reorder`}
+                  class="inline-flex h-10 w-8 touch-none cursor-grab select-none items-center justify-center rounded-md text-slate-400 transition hover:bg-white hover:text-slate-700 active:cursor-grabbing focus:outline-none focus:ring-4 focus:ring-brand-200"
+                  draggable="false"
+                  title="Drag to reorder"
+                  type="button"
+                  onclick={() => selectSection(section.id)}
+                  onpointerdown={(event) => handleSectionGripPointerDown(event, section.id)}
+                  onpointermove={handleSectionGripPointerMove}
+                  onpointerup={handleSectionGripPointerUp}
+                  onpointercancel={resetSectionDrag}
+                  onmousedown={(event) => handleSectionGripMouseDown(event, section.id)}
+                >
+                  <GripVertical class="h-5 w-5" aria-hidden="true" />
+                </button>
                 <span class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-sm font-semibold text-slate-600">
                   {sectionIndex + 1}
                 </span>
