@@ -39,6 +39,7 @@
   type PrintDensity = 'comfortable' | 'compact';
   type EditorPanelId = 'menu' | 'sections' | 'design' | 'print' | 'details';
   type SectionDropPosition = 'before' | 'after';
+  type DesignSettingKey = keyof DesignSettings;
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -46,6 +47,18 @@
     margin: PrintMargin;
     columns: SectionColumnSpan;
     density: PrintDensity;
+  };
+
+  type DesignSettings = {
+    titleScale: number;
+    sectionHeadingScale: number;
+    itemTextScale: number;
+    descriptionTextScale: number;
+    lineHeightScale: number;
+    headerSpacingScale: number;
+    sectionSpacingScale: number;
+    itemSpacingScale: number;
+    dividerWeightScale: number;
   };
 
   type MenuItem = {
@@ -77,6 +90,7 @@
     qrCodeLabel: string;
     stylePresetId: StylePresetId;
     printSettings: PrintSettings;
+    designSettings: DesignSettings;
     logoDataUrl: string;
     logoName: string;
     logoPlacement: LogoPlacement;
@@ -172,9 +186,24 @@
     wide: { label: 'Wide', value: '0.75in', previewPadding: '2rem' },
   };
 
-  const printDensities: Record<PrintDensity, { label: string; itemSpacing: string; sectionSpacing: string }> = {
-    comfortable: { label: 'Comfortable', itemSpacing: '1rem', sectionSpacing: '2rem' },
-    compact: { label: 'Compact', itemSpacing: '0.7rem', sectionSpacing: '1.35rem' },
+  const printDensities: Record<
+    PrintDensity,
+    { label: string; itemSpacing: string; sectionSpacing: string; itemSpacingRem: number; sectionSpacingRem: number }
+  > = {
+    comfortable: {
+      label: 'Comfortable',
+      itemSpacing: '1rem',
+      sectionSpacing: '2rem',
+      itemSpacingRem: 1,
+      sectionSpacingRem: 2,
+    },
+    compact: {
+      label: 'Compact',
+      itemSpacing: '0.7rem',
+      sectionSpacing: '1.35rem',
+      itemSpacingRem: 0.7,
+      sectionSpacingRem: 1.35,
+    },
   };
   const previewPaddingPixels: Record<PrintMargin, number> = {
     compact: 16,
@@ -193,6 +222,123 @@
     { id: 'design', label: 'Design', description: 'Visual presets' },
     { id: 'print', label: 'Print', description: 'Page setup' },
     { id: 'details', label: 'Details', description: 'Contact and QR details' },
+  ];
+
+  const defaultDesignSettings = (): DesignSettings => ({
+    titleScale: 100,
+    sectionHeadingScale: 100,
+    itemTextScale: 100,
+    descriptionTextScale: 100,
+    lineHeightScale: 100,
+    headerSpacingScale: 100,
+    sectionSpacingScale: 100,
+    itemSpacingScale: 100,
+    dividerWeightScale: 100,
+  });
+
+  const designControlGroups: Array<{
+    title: string;
+    controls: Array<{
+      description: string;
+      label: string;
+      max: number;
+      min: number;
+      setting: DesignSettingKey;
+      step: number;
+      unit: '%';
+    }>;
+  }> = [
+    {
+      title: 'Type scale',
+      controls: [
+        {
+          setting: 'titleScale',
+          label: 'Menu title',
+          description: 'Adjust the restaurant or menu name.',
+          min: 80,
+          max: 145,
+          step: 5,
+          unit: '%',
+        },
+        {
+          setting: 'sectionHeadingScale',
+          label: 'Section headings',
+          description: 'Resize category names like Appetizers or Entrees.',
+          min: 80,
+          max: 140,
+          step: 5,
+          unit: '%',
+        },
+        {
+          setting: 'itemTextScale',
+          label: 'Item names',
+          description: 'Resize menu item names and prices.',
+          min: 85,
+          max: 130,
+          step: 5,
+          unit: '%',
+        },
+        {
+          setting: 'descriptionTextScale',
+          label: 'Descriptions',
+          description: 'Resize item descriptions and small details.',
+          min: 80,
+          max: 125,
+          step: 5,
+          unit: '%',
+        },
+        {
+          setting: 'lineHeightScale',
+          label: 'Line height',
+          description: 'Tighten or relax multi-line descriptions.',
+          min: 85,
+          max: 130,
+          step: 5,
+          unit: '%',
+        },
+      ],
+    },
+    {
+      title: 'Spacing',
+      controls: [
+        {
+          setting: 'headerSpacingScale',
+          label: 'Header gap',
+          description: 'Space between the header and menu sections.',
+          min: 70,
+          max: 160,
+          step: 5,
+          unit: '%',
+        },
+        {
+          setting: 'sectionSpacingScale',
+          label: 'Section spacing',
+          description: 'Space between section blocks.',
+          min: 65,
+          max: 170,
+          step: 5,
+          unit: '%',
+        },
+        {
+          setting: 'itemSpacingScale',
+          label: 'Item spacing',
+          description: 'Space between menu items inside a section.',
+          min: 60,
+          max: 170,
+          step: 5,
+          unit: '%',
+        },
+        {
+          setting: 'dividerWeightScale',
+          label: 'Divider weight',
+          description: 'Make section rules lighter or bolder.',
+          min: 0,
+          max: 250,
+          step: 10,
+          unit: '%',
+        },
+      ],
+    },
   ];
 
   const stylePresets: StylePreset[] = [
@@ -317,6 +463,7 @@
     qrCodeLabel: 'Scan for online ordering',
     stylePresetId: 'simple',
     printSettings: defaultPrintSettings(),
+    designSettings: defaultDesignSettings(),
     logoDataUrl: '',
     logoName: '',
     logoPlacement: 'above-eyebrow',
@@ -1019,6 +1166,55 @@
     };
   };
 
+  const normalizeNumericSetting = (value: unknown, fallback: number, min: number, max: number) => {
+    const numericValue = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+
+    return Math.min(max, Math.max(min, numericValue));
+  };
+
+  const normalizeDesignSettings = (value: unknown): DesignSettings => {
+    const defaults = defaultDesignSettings();
+    if (!isRecord(value)) return defaults;
+
+    return {
+      titleScale: normalizeNumericSetting(value.titleScale, defaults.titleScale, 80, 145),
+      sectionHeadingScale: normalizeNumericSetting(
+        value.sectionHeadingScale,
+        defaults.sectionHeadingScale,
+        80,
+        140,
+      ),
+      itemTextScale: normalizeNumericSetting(value.itemTextScale, defaults.itemTextScale, 85, 130),
+      descriptionTextScale: normalizeNumericSetting(
+        value.descriptionTextScale,
+        defaults.descriptionTextScale,
+        80,
+        125,
+      ),
+      lineHeightScale: normalizeNumericSetting(value.lineHeightScale, defaults.lineHeightScale, 85, 130),
+      headerSpacingScale: normalizeNumericSetting(
+        value.headerSpacingScale,
+        defaults.headerSpacingScale,
+        70,
+        160,
+      ),
+      sectionSpacingScale: normalizeNumericSetting(
+        value.sectionSpacingScale,
+        defaults.sectionSpacingScale,
+        65,
+        170,
+      ),
+      itemSpacingScale: normalizeNumericSetting(value.itemSpacingScale, defaults.itemSpacingScale, 60, 170),
+      dividerWeightScale: normalizeNumericSetting(
+        value.dividerWeightScale,
+        defaults.dividerWeightScale,
+        0,
+        250,
+      ),
+    };
+  };
+
   const normalizeSectionColumnSpan = (span: unknown, sectionName: string): SectionColumnSpan => {
     if (span === 1 || span === 2) return span;
     return defaultSectionColumnSpan(sectionName);
@@ -1061,6 +1257,7 @@
     qrCodeLabel: '',
     stylePresetId: 'simple',
     printSettings: defaultPrintSettings(),
+    designSettings: defaultDesignSettings(),
     logoDataUrl: '',
     logoName: '',
     logoPlacement: 'above-eyebrow',
@@ -1252,6 +1449,7 @@
       logoPlacement: normalizeLogoPlacement(value.logoPlacement),
       stylePresetId: normalizeStylePresetId(value.stylePresetId),
       printSettings: normalizePrintSettings(value.printSettings),
+      designSettings: normalizeDesignSettings(value.designSettings),
       sections: value.sections.map(normalizeImportedSection),
     };
 
@@ -1289,6 +1487,7 @@
       loadedMenu.logoPlacement = normalizeLogoPlacement(parsedMenu.logoPlacement);
       loadedMenu.stylePresetId = normalizeStylePresetId(parsedMenu.stylePresetId);
       loadedMenu.printSettings = normalizePrintSettings(parsedMenu.printSettings);
+      loadedMenu.designSettings = normalizeDesignSettings(parsedMenu.designSettings);
       optionalDetailFields.forEach((field) => {
         loadedMenu[field] = normalizeTextField(parsedMenu[field]);
       });
@@ -1364,6 +1563,20 @@
   let selectedPrintPageSize = $derived(printPageSizes[menu.printSettings.pageSize]);
   let selectedPrintMargin = $derived(printMargins[menu.printSettings.margin]);
   let selectedPrintDensity = $derived(printDensities[menu.printSettings.density]);
+  let titleFontSize = $derived(30 * (menu.designSettings.titleScale / 100));
+  let sectionHeadingFontSize = $derived(18 * (menu.designSettings.sectionHeadingScale / 100));
+  let itemNameFontSize = $derived(16 * (menu.designSettings.itemTextScale / 100));
+  let descriptionFontSize = $derived(14 * (menu.designSettings.descriptionTextScale / 100));
+  let detailFontSize = $derived(12 * (menu.designSettings.descriptionTextScale / 100));
+  let bodyLineHeight = $derived(1.5 * (menu.designSettings.lineHeightScale / 100));
+  let itemLineHeight = $derived(1.35 * (menu.designSettings.lineHeightScale / 100));
+  let effectiveHeaderSpacingRem = $derived(1.5 * (menu.designSettings.headerSpacingScale / 100));
+  let effectiveItemSpacingRem = $derived(
+    selectedPrintDensity.itemSpacingRem * (menu.designSettings.itemSpacingScale / 100),
+  );
+  let effectiveSectionSpacingRem = $derived(
+    selectedPrintDensity.sectionSpacingRem * (menu.designSettings.sectionSpacingScale / 100),
+  );
   let printPageWidth = $derived(
     menu.printSettings.orientation === 'portrait' ? selectedPrintPageSize.width : selectedPrintPageSize.height,
   );
@@ -1381,7 +1594,23 @@
       `--menu-section-spacing: ${selectedPrintDensity.sectionSpacing};`,
     ].join(' '),
   );
-  let previewStyleVariables = $derived(`${activeStyleVariables} ${printSetupVariables}`);
+  let designStyleVariables = $derived(
+    [
+      `--menu-title-size: ${titleFontSize.toFixed(1)}px;`,
+      `--menu-section-heading-size: ${sectionHeadingFontSize.toFixed(1)}px;`,
+      `--menu-item-name-size: ${itemNameFontSize.toFixed(1)}px;`,
+      `--menu-price-size: ${itemNameFontSize.toFixed(1)}px;`,
+      `--menu-description-size: ${descriptionFontSize.toFixed(1)}px;`,
+      `--menu-detail-size: ${detailFontSize.toFixed(1)}px;`,
+      `--menu-body-line-height: ${bodyLineHeight.toFixed(2)};`,
+      `--menu-item-line-height: ${itemLineHeight.toFixed(2)};`,
+      `--menu-header-spacing: ${effectiveHeaderSpacingRem.toFixed(2)}rem;`,
+      `--menu-item-spacing: ${effectiveItemSpacingRem.toFixed(2)}rem;`,
+      `--menu-section-spacing: ${effectiveSectionSpacingRem.toFixed(2)}rem;`,
+      `--menu-rule-scale: ${(menu.designSettings.dividerWeightScale / 100).toFixed(2)};`,
+    ].join(' '),
+  );
+  let previewStyleVariables = $derived(`${activeStyleVariables} ${printSetupVariables} ${designStyleVariables}`);
   let printPageCss = $derived(`
 @media print {
   @page {
@@ -1489,6 +1718,16 @@
     }).format(numericPrice);
   };
 
+  const formatDesignSetting = (value: number) => `${Math.round(value)}%`;
+
+  const updateDesignSetting = (setting: DesignSettingKey, value: string) => {
+    menu.designSettings[setting] = Number(value);
+  };
+
+  const resetDesignSettings = () => {
+    menu.designSettings = defaultDesignSettings();
+  };
+
   const selectSection = (sectionId: string) => {
     selectedSectionId = sectionId;
     activeEditorPanel = 'sections';
@@ -1502,11 +1741,11 @@
   };
 
   const estimatePreviewHeaderHeight = () => {
-    let height = 108;
+    let height = Math.round(78 + titleFontSize * 1.35);
 
-    if (hasTopText) height += 26;
-    if (menu.subtitle.trim()) height += 30;
-    if (hasRestaurantDetails) height += 62;
+    if (hasTopText) height += Math.round(detailFontSize * bodyLineHeight + 10);
+    if (menu.subtitle.trim()) height += Math.round(descriptionFontSize * bodyLineHeight + 10);
+    if (hasRestaurantDetails) height += Math.round(detailFontSize * bodyLineHeight * 3.25);
     if (hasLogo && (menu.logoPlacement === 'above-eyebrow' || menu.logoPlacement === 'below-eyebrow')) {
       height += 86;
     }
@@ -1518,14 +1757,16 @@
     const isNarrowColumn = menu.printSettings.columns === 2 && sectionSpan === 1;
     const nameLines = estimateWrappedLineCount(item.name || 'Untitled item', isNarrowColumn ? 22 : 46);
     const descriptionLines = estimateWrappedLineCount(item.description, isNarrowColumn ? 34 : 78);
+    const nameLineHeight = itemNameFontSize * itemLineHeight;
+    const descriptionLineHeight = descriptionFontSize * bodyLineHeight;
 
-    return nameLines * 28 + (descriptionLines > 0 ? descriptionLines * 24 + 8 : 0);
+    return nameLines * nameLineHeight + (descriptionLines > 0 ? descriptionLines * descriptionLineHeight + 8 : 0);
   };
 
   const estimatePreviewSectionHeight = (section: PreviewSectionChunk) => {
     const sectionSpan = Math.min(section.columnSpan, menu.printSettings.columns) as SectionColumnSpan;
-    const itemGap = menu.printSettings.density === 'compact' ? 11 : 16;
-    const headingHeight = 50;
+    const itemGap = effectiveItemSpacingRem * 16;
+    const headingHeight = sectionHeadingFontSize * 1.35 + 26;
 
     if (section.items.length === 0) return headingHeight + 30;
 
@@ -1542,8 +1783,8 @@
   const estimatePreviewSectionsHeight = (sections: PreviewSectionChunk[]) => {
     if (sections.length === 0) return hasMenuContent ? 0 : 94;
 
-    const rowGap = menu.printSettings.density === 'compact' ? 22 : 32;
-    let totalHeight = 24;
+    const rowGap = effectiveSectionSpacingRem * 16;
+    let totalHeight = effectiveHeaderSpacingRem * 16;
     let pendingColumnHeights: number[] = [];
 
     const addRow = (rowHeight: number) => {
@@ -2734,6 +2975,56 @@
                 <span class="mt-1 block text-sm leading-6 text-slate-600">{preset.description}</span>
               </span>
             </button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div class="flex items-start gap-3">
+            <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+              <Sparkles class="h-5 w-5" />
+            </span>
+            <div>
+              <h2 class="text-xl font-semibold text-slate-950">Fine tune</h2>
+              <p class="mt-1 text-sm text-slate-600">Adjust typography, spacing, and dividers for this menu.</p>
+            </div>
+          </div>
+
+          <Button color="light" data-design-reset onclick={resetDesignSettings}>
+            <RotateCcw class="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+        </div>
+
+        <div class="grid gap-5">
+          {#each designControlGroups as group (group.title)}
+            <fieldset>
+              <legend class="text-sm font-semibold text-slate-900">{group.title}</legend>
+              <div class="mt-3 grid gap-4">
+                {#each group.controls as control (control.setting)}
+                  <label class="block rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <span class="flex items-center justify-between gap-3">
+                      <span class="text-sm font-medium text-slate-800">{control.label}</span>
+                      <span class="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-600 shadow-sm">
+                        {formatDesignSetting(menu.designSettings[control.setting])}
+                      </span>
+                    </span>
+                    <input
+                      class="mt-3 block w-full accent-brand-600"
+                      data-design-setting={control.setting}
+                      max={control.max}
+                      min={control.min}
+                      step={control.step}
+                      type="range"
+                      value={menu.designSettings[control.setting]}
+                      oninput={(event) => updateDesignSetting(control.setting, event.currentTarget.value)}
+                    />
+                    <span class="mt-2 block text-xs leading-5 text-slate-500">{control.description}</span>
+                  </label>
+                {/each}
+              </div>
+            </fieldset>
           {/each}
         </div>
       </div>

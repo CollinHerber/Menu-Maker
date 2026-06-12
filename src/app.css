@@ -142,13 +142,17 @@ textarea {
 
 .menu-print-preview .menu-print-header > p:first-of-type {
   color: var(--menu-accent, #16876f);
+  font-size: var(--menu-detail-size, 0.75rem);
   letter-spacing: var(--menu-heading-letter-spacing, 0.2em);
+  line-height: var(--menu-body-line-height, 1.5);
   text-transform: var(--menu-header-transform, uppercase);
 }
 
 .menu-print-preview h3 {
   color: var(--menu-text, #172033);
   font-family: var(--menu-heading-font, Georgia, ui-serif, serif);
+  font-size: var(--menu-title-size, 1.875rem);
+  line-height: 1.12;
 }
 
 .menu-print-preview h4,
@@ -156,8 +160,42 @@ textarea {
   color: var(--menu-text, #172033);
 }
 
+.menu-print-preview h4 {
+  font-size: var(--menu-section-heading-size, 1.125rem);
+  line-height: 1.25;
+}
+
+.menu-print-preview h5,
+.menu-print-preview .menu-print-item > div > p {
+  font-size: var(--menu-item-name-size, 1rem);
+  line-height: var(--menu-item-line-height, 1.35);
+}
+
 .menu-print-preview .menu-print-item > div > p {
   color: var(--menu-text, #172033);
+}
+
+.menu-print-preview .menu-print-item > p,
+.menu-print-preview .menu-print-empty-section,
+.menu-print-preview .menu-print-empty-state,
+.menu-print-preview .menu-print-footer {
+  font-size: var(--menu-description-size, 0.875rem);
+  line-height: var(--menu-body-line-height, 1.5);
+}
+
+.menu-print-preview .menu-print-header > p:not(:first-of-type),
+.menu-print-preview .menu-print-header > div,
+.menu-print-preview .menu-print-footer p,
+.menu-print-preview .menu-print-footer span {
+  line-height: var(--menu-body-line-height, 1.5);
+}
+
+.menu-print-preview .menu-print-header > p:not(:first-of-type) {
+  font-size: var(--menu-description-size, 0.875rem);
+}
+
+.menu-print-preview .menu-print-header > div {
+  font-size: var(--menu-detail-size, 0.75rem);
 }
 
 .menu-print-preview h4 {
@@ -177,10 +215,12 @@ textarea {
 
 .menu-print-preview .menu-print-grid {
   gap: var(--menu-section-spacing, 2rem);
+  margin-top: var(--menu-header-spacing, 1.5rem);
 }
 
 .menu-print-preview .menu-print-section-rule {
   border-color: var(--menu-rule, #cbd5e1);
+  border-top-width: calc(1px * var(--menu-rule-scale, 1));
 }
 
 .menu-print-preview .menu-print-section .space-y-4 > :not([hidden]) ~ :not([hidden]) {
@@ -206,7 +246,7 @@ textarea {
 }
 
 .menu-style-hometown .menu-print-section-heading {
-  border-bottom: 2px solid var(--menu-rule, #dfb99c);
+  border-bottom: calc(2px * var(--menu-rule-scale, 1)) solid var(--menu-rule, #dfb99c);
   padding-bottom: 0.4rem;
 }
 
