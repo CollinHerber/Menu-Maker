@@ -220,7 +220,9 @@ textarea {
 
 .menu-print-preview .menu-print-section-rule {
   border-color: var(--menu-rule, #cbd5e1);
-  border-top-width: calc(1px * var(--menu-rule-scale, 1));
+  border-top-style: var(--menu-rule-style, solid);
+  border-top-width: var(--menu-rule-width, calc(1px * var(--menu-rule-scale, 1)));
+  display: var(--menu-rule-display, block);
 }
 
 .menu-print-preview .menu-print-section .space-y-4 > :not([hidden]) ~ :not([hidden]) {
@@ -246,12 +248,14 @@ textarea {
 }
 
 .menu-style-hometown .menu-print-section-heading {
-  border-bottom: calc(2px * var(--menu-rule-scale, 1)) solid var(--menu-rule, #dfb99c);
+  border-bottom-color: var(--menu-rule, #dfb99c);
+  border-bottom-style: var(--menu-heading-divider-style, solid);
+  border-bottom-width: var(--menu-heading-divider-width, calc(2px * var(--menu-rule-scale, 1)));
   padding-bottom: 0.4rem;
 }
 
 .menu-style-hometown .menu-print-section-rule {
-  display: none;
+  display: var(--menu-rule-display, none);
 }
 
 .menu-print-footer {

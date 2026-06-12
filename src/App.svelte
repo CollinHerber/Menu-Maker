@@ -39,7 +39,20 @@
   type PrintDensity = 'comfortable' | 'compact';
   type EditorPanelId = 'menu' | 'sections' | 'design' | 'print' | 'details';
   type SectionDropPosition = 'before' | 'after';
-  type DesignSettingKey = keyof DesignSettings;
+  type DesignSettingKey =
+    | 'titleScale'
+    | 'sectionHeadingScale'
+    | 'itemTextScale'
+    | 'descriptionTextScale'
+    | 'lineHeightScale'
+    | 'headerSpacingScale'
+    | 'sectionSpacingScale'
+    | 'itemSpacingScale'
+    | 'dividerWeightScale';
+  type DesignColorSettingKey = 'accentColor' | 'backgroundColor' | 'textColor' | 'mutedColor' | 'ruleColor';
+  type HeadingFontChoice = 'preset' | 'serif' | 'sans' | 'display';
+  type BodyFontChoice = 'preset' | 'sans' | 'serif';
+  type DividerStyle = 'preset' | 'line' | 'bold' | 'double' | 'none';
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -50,6 +63,14 @@
   };
 
   type DesignSettings = {
+    accentColor: string;
+    backgroundColor: string;
+    textColor: string;
+    mutedColor: string;
+    ruleColor: string;
+    headingFont: HeadingFontChoice;
+    bodyFont: BodyFontChoice;
+    dividerStyle: DividerStyle;
     titleScale: number;
     sectionHeadingScale: number;
     itemTextScale: number;
@@ -225,6 +246,14 @@
   ];
 
   const defaultDesignSettings = (): DesignSettings => ({
+    accentColor: '',
+    backgroundColor: '',
+    textColor: '',
+    mutedColor: '',
+    ruleColor: '',
+    headingFont: 'preset',
+    bodyFont: 'preset',
+    dividerStyle: 'preset',
     titleScale: 100,
     sectionHeadingScale: 100,
     itemTextScale: 100,
@@ -235,6 +264,50 @@
     itemSpacingScale: 100,
     dividerWeightScale: 100,
   });
+
+  const headingFontStacks: Record<Exclude<HeadingFontChoice, 'preset'>, string> = {
+    serif: 'Georgia, ui-serif, serif',
+    sans: 'Inter, ui-sans-serif, system-ui, sans-serif',
+    display: '"Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif',
+  };
+
+  const bodyFontStacks: Record<Exclude<BodyFontChoice, 'preset'>, string> = {
+    sans: 'Inter, ui-sans-serif, system-ui, sans-serif',
+    serif: 'Georgia, "Times New Roman", serif',
+  };
+
+  const designColorControls: Array<{
+    description: string;
+    label: string;
+    setting: DesignColorSettingKey;
+  }> = [
+    { setting: 'accentColor', label: 'Accent', description: 'Used for highlights, icons, and small top text.' },
+    { setting: 'backgroundColor', label: 'Paper', description: 'The printable menu background.' },
+    { setting: 'textColor', label: 'Text', description: 'Main headings and item names.' },
+    { setting: 'mutedColor', label: 'Details', description: 'Descriptions, contact details, and footer notes.' },
+    { setting: 'ruleColor', label: 'Dividers', description: 'Section rules and separator lines.' },
+  ];
+
+  const headingFontOptions: Array<{ label: string; value: HeadingFontChoice }> = [
+    { value: 'preset', label: 'Preset' },
+    { value: 'serif', label: 'Serif' },
+    { value: 'sans', label: 'Sans' },
+    { value: 'display', label: 'Display' },
+  ];
+
+  const bodyFontOptions: Array<{ label: string; value: BodyFontChoice }> = [
+    { value: 'preset', label: 'Preset' },
+    { value: 'sans', label: 'Sans' },
+    { value: 'serif', label: 'Serif' },
+  ];
+
+  const dividerStyleOptions: Array<{ label: string; value: DividerStyle }> = [
+    { value: 'preset', label: 'Preset' },
+    { value: 'line', label: 'Line' },
+    { value: 'bold', label: 'Bold' },
+    { value: 'double', label: 'Double' },
+    { value: 'none', label: 'None' },
+  ];
 
   const designControlGroups: Array<{
     title: string;
@@ -1173,11 +1246,31 @@
     return Math.min(max, Math.max(min, numericValue));
   };
 
+  const normalizeColorSetting = (value: unknown) =>
+    typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : '';
+
+  const normalizeHeadingFont = (value: unknown): HeadingFontChoice =>
+    value === 'serif' || value === 'sans' || value === 'display' ? value : 'preset';
+
+  const normalizeBodyFont = (value: unknown): BodyFontChoice =>
+    value === 'sans' || value === 'serif' ? value : 'preset';
+
+  const normalizeDividerStyle = (value: unknown): DividerStyle =>
+    value === 'line' || value === 'bold' || value === 'double' || value === 'none' ? value : 'preset';
+
   const normalizeDesignSettings = (value: unknown): DesignSettings => {
     const defaults = defaultDesignSettings();
     if (!isRecord(value)) return defaults;
 
     return {
+      accentColor: normalizeColorSetting(value.accentColor),
+      backgroundColor: normalizeColorSetting(value.backgroundColor),
+      textColor: normalizeColorSetting(value.textColor),
+      mutedColor: normalizeColorSetting(value.mutedColor),
+      ruleColor: normalizeColorSetting(value.ruleColor),
+      headingFont: normalizeHeadingFont(value.headingFont),
+      bodyFont: normalizeBodyFont(value.bodyFont),
+      dividerStyle: normalizeDividerStyle(value.dividerStyle),
       titleScale: normalizeNumericSetting(value.titleScale, defaults.titleScale, 80, 145),
       sectionHeadingScale: normalizeNumericSetting(
         value.sectionHeadingScale,
@@ -1560,6 +1653,25 @@
       .map(([key, value]) => `${key}: ${value};`)
       .join(' '),
   );
+  const presetVariable = (key: string) => activeStylePreset.variables[key] ?? '';
+
+  let activeAccentColor = $derived(menu.designSettings.accentColor || presetVariable('--menu-accent') || '#16876f');
+  let activeBackgroundColor = $derived(
+    menu.designSettings.backgroundColor || presetVariable('--menu-bg') || '#fffdf8',
+  );
+  let activeTextColor = $derived(menu.designSettings.textColor || presetVariable('--menu-text') || '#172033');
+  let activeMutedColor = $derived(menu.designSettings.mutedColor || presetVariable('--menu-muted') || '#5f6b7a');
+  let activeRuleColor = $derived(menu.designSettings.ruleColor || presetVariable('--menu-rule') || '#cbd5e1');
+  let activeHeadingFont = $derived(
+    menu.designSettings.headingFont === 'preset'
+      ? presetVariable('--menu-heading-font') || headingFontStacks.serif
+      : headingFontStacks[menu.designSettings.headingFont],
+  );
+  let activeBodyFont = $derived(
+    menu.designSettings.bodyFont === 'preset'
+      ? presetVariable('--menu-body-font') || bodyFontStacks.sans
+      : bodyFontStacks[menu.designSettings.bodyFont],
+  );
   let selectedPrintPageSize = $derived(printPageSizes[menu.printSettings.pageSize]);
   let selectedPrintMargin = $derived(printMargins[menu.printSettings.margin]);
   let selectedPrintDensity = $derived(printDensities[menu.printSettings.density]);
@@ -1577,6 +1689,58 @@
   let effectiveSectionSpacingRem = $derived(
     selectedPrintDensity.sectionSpacingRem * (menu.designSettings.sectionSpacingScale / 100),
   );
+  let dividerConfig = $derived.by(() => {
+    const scale = menu.designSettings.dividerWeightScale / 100;
+    const isHometownPreset = menu.stylePresetId === 'hometown';
+
+    if (menu.designSettings.dividerStyle === 'none') {
+      return {
+        headingDividerStyle: 'solid',
+        headingDividerWidth: '0px',
+        ruleDisplay: 'none',
+        ruleStyle: 'solid',
+        ruleWidth: '0px',
+      };
+    }
+
+    if (menu.designSettings.dividerStyle === 'double') {
+      return {
+        headingDividerStyle: 'solid',
+        headingDividerWidth: '0px',
+        ruleDisplay: 'block',
+        ruleStyle: 'double',
+        ruleWidth: `${Math.max(1, 3 * scale).toFixed(2)}px`,
+      };
+    }
+
+    if (menu.designSettings.dividerStyle === 'bold') {
+      return {
+        headingDividerStyle: 'solid',
+        headingDividerWidth: '0px',
+        ruleDisplay: 'block',
+        ruleStyle: 'solid',
+        ruleWidth: `${Math.max(1, 2 * scale).toFixed(2)}px`,
+      };
+    }
+
+    if (menu.designSettings.dividerStyle === 'line') {
+      return {
+        headingDividerStyle: 'solid',
+        headingDividerWidth: '0px',
+        ruleDisplay: 'block',
+        ruleStyle: 'solid',
+        ruleWidth: `${Math.max(1, scale).toFixed(2)}px`,
+      };
+    }
+
+    return {
+      headingDividerStyle: 'solid',
+      headingDividerWidth: isHometownPreset ? `${Math.max(1, 2 * scale).toFixed(2)}px` : '0px',
+      ruleDisplay: isHometownPreset ? 'none' : 'block',
+      ruleStyle: 'solid',
+      ruleWidth: `${Math.max(1, scale).toFixed(2)}px`,
+    };
+  });
   let printPageWidth = $derived(
     menu.printSettings.orientation === 'portrait' ? selectedPrintPageSize.width : selectedPrintPageSize.height,
   );
@@ -1596,6 +1760,13 @@
   );
   let designStyleVariables = $derived(
     [
+      `--menu-bg: ${activeBackgroundColor};`,
+      `--menu-text: ${activeTextColor};`,
+      `--menu-muted: ${activeMutedColor};`,
+      `--menu-accent: ${activeAccentColor};`,
+      `--menu-rule: ${activeRuleColor};`,
+      `--menu-heading-font: ${activeHeadingFont};`,
+      `--menu-body-font: ${activeBodyFont};`,
       `--menu-title-size: ${titleFontSize.toFixed(1)}px;`,
       `--menu-section-heading-size: ${sectionHeadingFontSize.toFixed(1)}px;`,
       `--menu-item-name-size: ${itemNameFontSize.toFixed(1)}px;`,
@@ -1608,6 +1779,11 @@
       `--menu-item-spacing: ${effectiveItemSpacingRem.toFixed(2)}rem;`,
       `--menu-section-spacing: ${effectiveSectionSpacingRem.toFixed(2)}rem;`,
       `--menu-rule-scale: ${(menu.designSettings.dividerWeightScale / 100).toFixed(2)};`,
+      `--menu-rule-display: ${dividerConfig.ruleDisplay};`,
+      `--menu-rule-style: ${dividerConfig.ruleStyle};`,
+      `--menu-rule-width: ${dividerConfig.ruleWidth};`,
+      `--menu-heading-divider-style: ${dividerConfig.headingDividerStyle};`,
+      `--menu-heading-divider-width: ${dividerConfig.headingDividerWidth};`,
     ].join(' '),
   );
   let previewStyleVariables = $derived(`${activeStyleVariables} ${printSetupVariables} ${designStyleVariables}`);
@@ -1724,8 +1900,17 @@
     menu.designSettings[setting] = Number(value);
   };
 
+  const updateDesignColor = (setting: DesignColorSettingKey, value: string) => {
+    menu.designSettings[setting] = value;
+  };
+
   const resetDesignSettings = () => {
     menu.designSettings = defaultDesignSettings();
+  };
+
+  const applyStylePreset = (presetId: StylePresetId) => {
+    menu.stylePresetId = presetId;
+    resetDesignSettings();
   };
 
   const selectSection = (sectionId: string) => {
@@ -2963,7 +3148,7 @@
               data-style-preset={preset.id}
               type="button"
               aria-pressed={menu.stylePresetId === preset.id}
-              onclick={() => (menu.stylePresetId = preset.id)}
+              onclick={() => applyStylePreset(preset.id)}
             >
               <span
                 class="mt-1 h-7 w-7 shrink-0 rounded-full border border-white shadow ring-1 ring-slate-200"
@@ -2976,6 +3161,129 @@
               </span>
             </button>
           {/each}
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-start gap-3">
+          <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <Sparkles class="h-5 w-5" />
+          </span>
+          <div>
+            <h2 class="text-xl font-semibold text-slate-950">Custom theme</h2>
+            <p class="mt-1 text-sm text-slate-600">Tune colors, font styles, and section dividers.</p>
+          </div>
+        </div>
+
+        <div class="grid gap-5">
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Colors</legend>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              {#each designColorControls as control (control.setting)}
+                <label class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <span class="flex items-start justify-between gap-3">
+                    <span>
+                      <span class="block text-sm font-medium text-slate-800">{control.label}</span>
+                      <span class="mt-1 block text-xs leading-5 text-slate-500">{control.description}</span>
+                    </span>
+                    <span
+                      class="h-8 w-8 shrink-0 rounded-full border border-white shadow ring-1 ring-slate-200"
+                      style={`background: ${
+                        control.setting === 'accentColor'
+                          ? activeAccentColor
+                          : control.setting === 'backgroundColor'
+                            ? activeBackgroundColor
+                            : control.setting === 'textColor'
+                              ? activeTextColor
+                              : control.setting === 'mutedColor'
+                                ? activeMutedColor
+                                : activeRuleColor
+                      };`}
+                      aria-hidden="true"
+                    ></span>
+                  </span>
+                  <input
+                    class="mt-3 h-10 w-full cursor-pointer rounded-lg border border-slate-300 bg-white p-1"
+                    data-design-color={control.setting}
+                    type="color"
+                    value={control.setting === 'accentColor'
+                      ? activeAccentColor
+                      : control.setting === 'backgroundColor'
+                        ? activeBackgroundColor
+                        : control.setting === 'textColor'
+                          ? activeTextColor
+                          : control.setting === 'mutedColor'
+                            ? activeMutedColor
+                            : activeRuleColor}
+                    oninput={(event) => updateDesignColor(control.setting, event.currentTarget.value)}
+                  />
+                </label>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Heading font</legend>
+            <div class="mt-3 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1 sm:grid-cols-4">
+              {#each headingFontOptions as option (option.value)}
+                <button
+                  aria-pressed={menu.designSettings.headingFont === option.value}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.designSettings.headingFont === option.value
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-design-font={`heading-${option.value}`}
+                  type="button"
+                  onclick={() => (menu.designSettings.headingFont = option.value)}
+                >
+                  {option.label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Body font</legend>
+            <div class="mt-3 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+              {#each bodyFontOptions as option (option.value)}
+                <button
+                  aria-pressed={menu.designSettings.bodyFont === option.value}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.designSettings.bodyFont === option.value
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-design-font={`body-${option.value}`}
+                  type="button"
+                  onclick={() => (menu.designSettings.bodyFont = option.value)}
+                >
+                  {option.label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Divider style</legend>
+            <div class="mt-3 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1 sm:grid-cols-5">
+              {#each dividerStyleOptions as option (option.value)}
+                <button
+                  aria-pressed={menu.designSettings.dividerStyle === option.value}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.designSettings.dividerStyle === option.value
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-design-divider={option.value}
+                  type="button"
+                  onclick={() => (menu.designSettings.dividerStyle = option.value)}
+                >
+                  {option.label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
         </div>
       </div>
 
@@ -2993,7 +3301,7 @@
 
           <Button color="light" data-design-reset onclick={resetDesignSettings}>
             <RotateCcw class="mr-2 h-4 w-4" />
-            Reset
+            Reset to preset
           </Button>
         </div>
 
