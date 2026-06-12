@@ -51,11 +51,17 @@
     | 'headerSpacingScale'
     | 'sectionSpacingScale'
     | 'itemSpacingScale'
-    | 'dividerWeightScale';
+    | 'dividerWeightScale'
+    | 'decorationScale';
   type DesignColorSettingKey = 'accentColor' | 'backgroundColor' | 'textColor' | 'mutedColor' | 'ruleColor';
   type HeadingFontChoice = 'preset' | 'serif' | 'sans' | 'display';
   type BodyFontChoice = 'preset' | 'sans' | 'serif';
   type DividerStyle = 'preset' | 'line' | 'bold' | 'double' | 'none';
+  type BorderStyle = 'none' | 'line' | 'double' | 'dotted' | 'ornate';
+  type CornerStyle = 'none' | 'line' | 'flourish';
+  type HeaderFlair = 'none' | 'rule' | 'ornament';
+  type WatermarkStyle = 'none' | 'botanical';
+  type PaperTexture = 'none' | 'warm' | 'parchment' | 'sage';
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -74,6 +80,11 @@
     headingFont: HeadingFontChoice;
     bodyFont: BodyFontChoice;
     dividerStyle: DividerStyle;
+    borderStyle: BorderStyle;
+    cornerStyle: CornerStyle;
+    headerFlair: HeaderFlair;
+    watermarkStyle: WatermarkStyle;
+    paperTexture: PaperTexture;
     titleScale: number;
     sectionHeadingScale: number;
     itemTextScale: number;
@@ -83,6 +94,7 @@
     sectionSpacingScale: number;
     itemSpacingScale: number;
     dividerWeightScale: number;
+    decorationScale: number;
   };
 
   type MenuItem = {
@@ -272,6 +284,11 @@
     headingFont: 'preset',
     bodyFont: 'preset',
     dividerStyle: 'preset',
+    borderStyle: 'none',
+    cornerStyle: 'none',
+    headerFlair: 'none',
+    watermarkStyle: 'none',
+    paperTexture: 'none',
     titleScale: 100,
     sectionHeadingScale: 100,
     itemTextScale: 100,
@@ -281,6 +298,7 @@
     sectionSpacingScale: 100,
     itemSpacingScale: 100,
     dividerWeightScale: 100,
+    decorationScale: 100,
   });
 
   const headingFontStacks: Record<Exclude<HeadingFontChoice, 'preset'>, string> = {
@@ -325,6 +343,38 @@
     { value: 'bold', label: 'Bold' },
     { value: 'double', label: 'Double' },
     { value: 'none', label: 'None' },
+  ];
+
+  const borderStyleOptions: Array<{ label: string; value: BorderStyle }> = [
+    { value: 'none', label: 'None' },
+    { value: 'line', label: 'Line' },
+    { value: 'double', label: 'Double' },
+    { value: 'dotted', label: 'Dots' },
+    { value: 'ornate', label: 'Ornate' },
+  ];
+
+  const cornerStyleOptions: Array<{ label: string; value: CornerStyle }> = [
+    { value: 'none', label: 'None' },
+    { value: 'line', label: 'Line' },
+    { value: 'flourish', label: 'Flourish' },
+  ];
+
+  const headerFlairOptions: Array<{ label: string; value: HeaderFlair }> = [
+    { value: 'none', label: 'None' },
+    { value: 'rule', label: 'Rule' },
+    { value: 'ornament', label: 'Ornament' },
+  ];
+
+  const watermarkStyleOptions: Array<{ label: string; value: WatermarkStyle }> = [
+    { value: 'none', label: 'None' },
+    { value: 'botanical', label: 'Botanical' },
+  ];
+
+  const paperTextureOptions: Array<{ label: string; value: PaperTexture }> = [
+    { value: 'none', label: 'Clean' },
+    { value: 'warm', label: 'Warm' },
+    { value: 'parchment', label: 'Parchment' },
+    { value: 'sage', label: 'Sage' },
   ];
 
   const designControlGroups: Array<{
@@ -426,6 +476,20 @@
           min: 0,
           max: 250,
           step: 10,
+          unit: '%',
+        },
+      ],
+    },
+    {
+      title: 'Decoration',
+      controls: [
+        {
+          setting: 'decorationScale',
+          label: 'Flair scale',
+          description: 'Resize decorative borders, corners, and ornaments.',
+          min: 60,
+          max: 150,
+          step: 5,
           unit: '%',
         },
       ],
@@ -1317,6 +1381,20 @@
   const normalizeDividerStyle = (value: unknown): DividerStyle =>
     value === 'line' || value === 'bold' || value === 'double' || value === 'none' ? value : 'preset';
 
+  const normalizeBorderStyle = (value: unknown): BorderStyle =>
+    value === 'line' || value === 'double' || value === 'dotted' || value === 'ornate' ? value : 'none';
+
+  const normalizeCornerStyle = (value: unknown): CornerStyle =>
+    value === 'line' || value === 'flourish' ? value : 'none';
+
+  const normalizeHeaderFlair = (value: unknown): HeaderFlair =>
+    value === 'rule' || value === 'ornament' ? value : 'none';
+
+  const normalizeWatermarkStyle = (value: unknown): WatermarkStyle => (value === 'botanical' ? value : 'none');
+
+  const normalizePaperTexture = (value: unknown): PaperTexture =>
+    value === 'warm' || value === 'parchment' || value === 'sage' ? value : 'none';
+
   const normalizeDesignSettings = (value: unknown): DesignSettings => {
     const defaults = defaultDesignSettings();
     if (!isRecord(value)) return defaults;
@@ -1330,6 +1408,11 @@
       headingFont: normalizeHeadingFont(value.headingFont),
       bodyFont: normalizeBodyFont(value.bodyFont),
       dividerStyle: normalizeDividerStyle(value.dividerStyle),
+      borderStyle: normalizeBorderStyle(value.borderStyle),
+      cornerStyle: normalizeCornerStyle(value.cornerStyle),
+      headerFlair: normalizeHeaderFlair(value.headerFlair),
+      watermarkStyle: normalizeWatermarkStyle(value.watermarkStyle),
+      paperTexture: normalizePaperTexture(value.paperTexture),
       titleScale: normalizeNumericSetting(value.titleScale, defaults.titleScale, 80, 145),
       sectionHeadingScale: normalizeNumericSetting(
         value.sectionHeadingScale,
@@ -1364,6 +1447,7 @@
         0,
         250,
       ),
+      decorationScale: normalizeNumericSetting(value.decorationScale, defaults.decorationScale, 60, 150),
     };
   };
 
@@ -1974,6 +2058,7 @@
       `--menu-rule-width: ${dividerConfig.ruleWidth};`,
       `--menu-heading-divider-style: ${dividerConfig.headingDividerStyle};`,
       `--menu-heading-divider-width: ${dividerConfig.headingDividerWidth};`,
+      `--menu-decoration-scale: ${(menu.designSettings.decorationScale / 100).toFixed(2)};`,
     ].join(' '),
   );
   let previewStyleVariables = $derived(`${activeStyleVariables} ${printSetupVariables} ${designStyleVariables}`);
@@ -2243,6 +2328,10 @@
 
   const estimatePreviewHeaderHeight = () => {
     let height = Math.round(78 + titleFontSize * 1.35);
+
+    if (menu.designSettings.headerFlair !== 'none') {
+      height += Math.round(26 * (menu.designSettings.decorationScale / 100));
+    }
 
     if (hasTopText) height += Math.round(detailFontSize * bodyLineHeight + 10);
     if (menu.subtitle.trim()) height += Math.round(descriptionFontSize * bodyLineHeight + 10);
@@ -4014,6 +4103,127 @@
       </div>
 
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-start gap-3">
+          <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <Sparkles class="h-5 w-5" />
+          </span>
+          <div>
+            <h2 class="text-xl font-semibold text-slate-950">Borders and flair</h2>
+            <p class="mt-1 text-sm text-slate-600">Add printable borders, corner accents, top ornaments, and subtle paper effects.</p>
+          </div>
+        </div>
+
+        <div class="grid gap-5">
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Menu border</legend>
+            <div class="mt-3 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1 sm:grid-cols-5">
+              {#each borderStyleOptions as option (option.value)}
+                <button
+                  aria-pressed={menu.designSettings.borderStyle === option.value}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.designSettings.borderStyle === option.value
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-design-border={option.value}
+                  type="button"
+                  onclick={() => (menu.designSettings.borderStyle = option.value)}
+                >
+                  {option.label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Corner accents</legend>
+            <div class="mt-3 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+              {#each cornerStyleOptions as option (option.value)}
+                <button
+                  aria-pressed={menu.designSettings.cornerStyle === option.value}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.designSettings.cornerStyle === option.value
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-design-corners={option.value}
+                  type="button"
+                  onclick={() => (menu.designSettings.cornerStyle = option.value)}
+                >
+                  {option.label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Header ornament</legend>
+            <div class="mt-3 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+              {#each headerFlairOptions as option (option.value)}
+                <button
+                  aria-pressed={menu.designSettings.headerFlair === option.value}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.designSettings.headerFlair === option.value
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-design-header-flair={option.value}
+                  type="button"
+                  onclick={() => (menu.designSettings.headerFlair = option.value)}
+                >
+                  {option.label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <div class="grid gap-5 xl:grid-cols-2">
+            <fieldset>
+              <legend class="text-sm font-semibold text-slate-900">Watermark</legend>
+              <div class="mt-3 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+                {#each watermarkStyleOptions as option (option.value)}
+                  <button
+                    aria-pressed={menu.designSettings.watermarkStyle === option.value}
+                    class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                      menu.designSettings.watermarkStyle === option.value
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                    data-design-watermark={option.value}
+                    type="button"
+                    onclick={() => (menu.designSettings.watermarkStyle = option.value)}
+                  >
+                    {option.label}
+                  </button>
+                {/each}
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend class="text-sm font-semibold text-slate-900">Paper effect</legend>
+              <div class="mt-3 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+                {#each paperTextureOptions as option (option.value)}
+                  <button
+                    aria-pressed={menu.designSettings.paperTexture === option.value}
+                    class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                      menu.designSettings.paperTexture === option.value
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                    data-design-paper={option.value}
+                    type="button"
+                    onclick={() => (menu.designSettings.paperTexture = option.value)}
+                  >
+                    {option.label}
+                  </button>
+                {/each}
+              </div>
+            </fieldset>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div class="flex items-start gap-3">
             <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
@@ -4769,10 +4979,24 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
           <div bind:this={previewElement} class="menu-print-pages" style={previewStyleVariables}>
             {#each previewPages as page, pageIndex (page.id)}
               <div
-                class={`menu-print-preview ${activeStylePreset.previewClass} rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-sm sm:p-8`}
+                class={`menu-print-preview ${activeStylePreset.previewClass} menu-border-${menu.designSettings.borderStyle} menu-corners-${menu.designSettings.cornerStyle} menu-flair-${menu.designSettings.headerFlair} menu-watermark-${menu.designSettings.watermarkStyle} menu-paper-${menu.designSettings.paperTexture} rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-sm sm:p-8`}
                 data-preview-page={pageIndex + 1}
               >
+                {#if menu.designSettings.watermarkStyle !== 'none'}
+                  <span class="menu-print-watermark" aria-hidden="true"></span>
+                {/if}
+
+                {#if menu.designSettings.cornerStyle !== 'none'}
+                  <span class="menu-print-corners" aria-hidden="true"></span>
+                {/if}
+
                 {#if page.showHeader}
+                  {#if menu.designSettings.headerFlair !== 'none'}
+                    <div class="menu-print-top-flair" aria-hidden="true">
+                      <span class="menu-print-top-flair-mark"></span>
+                    </div>
+                  {/if}
+
                   <div class="menu-print-header relative border-b border-slate-300 pb-6 text-center">
                     {#if hasLogo && menu.logoPlacement === 'left-eyebrow'}
                       <img

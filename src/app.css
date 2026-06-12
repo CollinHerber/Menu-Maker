@@ -121,6 +121,10 @@ textarea {
 }
 
 .menu-print-preview {
+  --menu-decoration-scale: 1;
+  --menu-print-border-shadow: none;
+  --menu-print-border-style: solid;
+  --menu-print-border-width: 0px;
   background: var(--menu-bg, #fffdf8) !important;
   color: var(--menu-text, #172033);
   box-sizing: border-box;
@@ -131,9 +135,198 @@ textarea {
   max-width: none;
   overflow: hidden;
   padding: var(--print-preview-padding, 1.5rem) !important;
+  position: relative;
   text-align: initial;
   width: var(--print-preview-paper-width, 612px);
   aspect-ratio: var(--print-preview-aspect, auto);
+  isolation: isolate;
+}
+
+.menu-print-preview > :not(.menu-print-watermark):not(.menu-print-corners) {
+  position: relative;
+  z-index: 1;
+}
+
+.menu-paper-warm {
+  background-color: #fff8ec !important;
+  background-image:
+    radial-gradient(circle at 20% 18%, rgba(181, 84, 45, 0.1), transparent 28%),
+    radial-gradient(circle at 78% 82%, rgba(22, 135, 111, 0.08), transparent 32%) !important;
+}
+
+.menu-paper-parchment {
+  background-color: #fff4dc !important;
+  background-image:
+    radial-gradient(circle at 16% 12%, rgba(143, 92, 47, 0.16), transparent 30%),
+    radial-gradient(circle at 85% 22%, rgba(143, 92, 47, 0.1), transparent 24%),
+    radial-gradient(circle at 50% 92%, rgba(143, 92, 47, 0.12), transparent 34%),
+    linear-gradient(90deg, rgba(143, 92, 47, 0.08), transparent 16%, transparent 84%, rgba(143, 92, 47, 0.08)) !important;
+}
+
+.menu-paper-sage {
+  background-color: #eef7e8 !important;
+  background-image:
+    radial-gradient(circle at 8% 52%, rgba(22, 135, 111, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.38), transparent 40%, rgba(22, 135, 111, 0.06)) !important;
+}
+
+.menu-border-line {
+  --menu-print-border-width: calc(2px * var(--menu-decoration-scale));
+  border-color: var(--menu-rule, #cbd5e1) !important;
+  border-style: solid !important;
+  border-width: var(--menu-print-border-width) !important;
+}
+
+.menu-border-double {
+  --menu-print-border-style: double;
+  --menu-print-border-width: calc(5px * var(--menu-decoration-scale));
+  border-color: var(--menu-rule, #cbd5e1) !important;
+  border-style: double !important;
+  border-width: var(--menu-print-border-width) !important;
+}
+
+.menu-border-dotted {
+  --menu-print-border-style: dotted;
+  --menu-print-border-width: calc(5px * var(--menu-decoration-scale));
+  border-color: var(--menu-rule, #cbd5e1) !important;
+  border-style: dotted !important;
+  border-width: var(--menu-print-border-width) !important;
+}
+
+.menu-border-ornate {
+  --menu-print-border-shadow:
+    inset 0 0 0 calc(6px * var(--menu-decoration-scale)) var(--menu-bg, #fffdf8),
+    inset 0 0 0 calc(7px * var(--menu-decoration-scale)) var(--menu-rule, #cbd5e1);
+  --menu-print-border-width: calc(1px * var(--menu-decoration-scale));
+  border-color: var(--menu-rule, #cbd5e1) !important;
+  border-style: solid !important;
+  border-width: var(--menu-print-border-width) !important;
+  box-shadow: var(--menu-print-border-shadow), 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+}
+
+.menu-print-corners {
+  --corner-size: calc(2.7rem * var(--menu-decoration-scale));
+  --corner-line: calc(1px * var(--menu-decoration-scale));
+  inset: calc(0.8rem * var(--menu-decoration-scale));
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.menu-corners-line .menu-print-corners,
+.menu-corners-flourish .menu-print-corners {
+  background:
+    linear-gradient(var(--menu-rule, #cbd5e1), var(--menu-rule, #cbd5e1)) left top / var(--corner-size) var(--corner-line) no-repeat,
+    linear-gradient(var(--menu-rule, #cbd5e1), var(--menu-rule, #cbd5e1)) left top / var(--corner-line) var(--corner-size) no-repeat,
+    linear-gradient(var(--menu-rule, #cbd5e1), var(--menu-rule, #cbd5e1)) right top / var(--corner-size) var(--corner-line) no-repeat,
+    linear-gradient(var(--menu-rule, #cbd5e1), var(--menu-rule, #cbd5e1)) right top / var(--corner-line) var(--corner-size) no-repeat,
+    linear-gradient(var(--menu-rule, #cbd5e1), var(--menu-rule, #cbd5e1)) left bottom / var(--corner-size) var(--corner-line) no-repeat,
+    linear-gradient(var(--menu-rule, #cbd5e1), var(--menu-rule, #cbd5e1)) left bottom / var(--corner-line) var(--corner-size) no-repeat,
+    linear-gradient(var(--menu-rule, #cbd5e1), var(--menu-rule, #cbd5e1)) right bottom / var(--corner-size) var(--corner-line) no-repeat,
+    linear-gradient(var(--menu-rule, #cbd5e1), var(--menu-rule, #cbd5e1)) right bottom / var(--corner-line) var(--corner-size) no-repeat;
+}
+
+.menu-corners-flourish .menu-print-corners::before {
+  background:
+    radial-gradient(circle at 0 0, transparent 0 calc(0.62rem * var(--menu-decoration-scale)), var(--menu-rule, #cbd5e1) calc(0.66rem * var(--menu-decoration-scale)) calc(0.74rem * var(--menu-decoration-scale)), transparent calc(0.78rem * var(--menu-decoration-scale))),
+    radial-gradient(circle at 100% 0, transparent 0 calc(0.62rem * var(--menu-decoration-scale)), var(--menu-rule, #cbd5e1) calc(0.66rem * var(--menu-decoration-scale)) calc(0.74rem * var(--menu-decoration-scale)), transparent calc(0.78rem * var(--menu-decoration-scale))),
+    radial-gradient(circle at 0 100%, transparent 0 calc(0.62rem * var(--menu-decoration-scale)), var(--menu-rule, #cbd5e1) calc(0.66rem * var(--menu-decoration-scale)) calc(0.74rem * var(--menu-decoration-scale)), transparent calc(0.78rem * var(--menu-decoration-scale))),
+    radial-gradient(circle at 100% 100%, transparent 0 calc(0.62rem * var(--menu-decoration-scale)), var(--menu-rule, #cbd5e1) calc(0.66rem * var(--menu-decoration-scale)) calc(0.74rem * var(--menu-decoration-scale)), transparent calc(0.78rem * var(--menu-decoration-scale)));
+  content: "";
+  inset: calc(-0.25rem * var(--menu-decoration-scale));
+  position: absolute;
+}
+
+.menu-print-top-flair {
+  align-items: center;
+  color: var(--menu-rule, #cbd5e1);
+  display: flex;
+  gap: calc(0.7rem * var(--menu-decoration-scale));
+  justify-content: center;
+  margin-bottom: calc(0.85rem * var(--menu-decoration-scale));
+}
+
+.menu-print-top-flair::before,
+.menu-print-top-flair::after {
+  background: currentColor;
+  content: "";
+  flex: 0 1 calc(6rem * var(--menu-decoration-scale));
+  height: calc(1px * var(--menu-decoration-scale));
+}
+
+.menu-print-top-flair-mark {
+  color: var(--menu-rule, #cbd5e1);
+  display: inline-block;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.menu-flair-rule .menu-print-top-flair-mark {
+  background: currentColor;
+  height: calc(0.45rem * var(--menu-decoration-scale));
+  transform: rotate(45deg);
+  width: calc(0.45rem * var(--menu-decoration-scale));
+}
+
+.menu-flair-ornament .menu-print-top-flair-mark {
+  border-bottom: calc(1px * var(--menu-decoration-scale)) solid currentColor;
+  border-top: calc(1px * var(--menu-decoration-scale)) solid currentColor;
+  height: calc(0.9rem * var(--menu-decoration-scale));
+  width: calc(3.4rem * var(--menu-decoration-scale));
+}
+
+.menu-flair-ornament .menu-print-top-flair-mark::before,
+.menu-flair-ornament .menu-print-top-flair-mark::after {
+  border: calc(1px * var(--menu-decoration-scale)) solid currentColor;
+  border-radius: 999px;
+  content: "";
+  height: calc(1rem * var(--menu-decoration-scale));
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: calc(1rem * var(--menu-decoration-scale));
+}
+
+.menu-flair-ornament .menu-print-top-flair-mark::before {
+  left: calc(-0.65rem * var(--menu-decoration-scale));
+}
+
+.menu-flair-ornament .menu-print-top-flair-mark::after {
+  right: calc(-0.65rem * var(--menu-decoration-scale));
+}
+
+.menu-flair-ornament .menu-print-section-heading > span:first-child::before,
+.menu-flair-ornament .menu-print-section-heading > span:first-child::after {
+  background: var(--menu-rule, #cbd5e1);
+  content: "";
+  display: inline-block;
+  height: calc(0.35rem * var(--menu-decoration-scale));
+  margin-inline: calc(0.45rem * var(--menu-decoration-scale));
+  transform: rotate(45deg) translateY(-0.12rem);
+  width: calc(0.35rem * var(--menu-decoration-scale));
+}
+
+.menu-print-watermark {
+  color: var(--menu-accent, #16876f);
+  height: calc(26rem * var(--menu-decoration-scale));
+  left: calc(-4.5rem * var(--menu-decoration-scale));
+  opacity: 0.12;
+  pointer-events: none;
+  position: absolute;
+  top: 25%;
+  transform: rotate(-9deg);
+  width: calc(18rem * var(--menu-decoration-scale));
+  z-index: 0;
+}
+
+.menu-watermark-botanical .menu-print-watermark {
+  background:
+    radial-gradient(ellipse at 45% 50%, transparent 0 36%, currentColor 37% 38%, transparent 39%),
+    radial-gradient(ellipse at 34% 30%, transparent 0 38%, currentColor 39% 40%, transparent 41%),
+    radial-gradient(ellipse at 62% 28%, transparent 0 38%, currentColor 39% 40%, transparent 41%),
+    radial-gradient(ellipse at 30% 70%, transparent 0 38%, currentColor 39% 40%, transparent 41%),
+    linear-gradient(102deg, transparent 0 48%, currentColor 49% 50%, transparent 51% 100%);
+  background-repeat: no-repeat;
 }
 
 .menu-print-preview .menu-print-header {
@@ -324,14 +517,17 @@ textarea {
   }
 
   .menu-print-preview {
-    border: 0 !important;
-    box-shadow: none !important;
-    background: white !important;
+    background-color: var(--menu-bg, white) !important;
+    border-color: var(--menu-rule, #cbd5e1) !important;
+    border-style: var(--menu-print-border-style, solid) !important;
+    border-width: var(--menu-print-border-width, 0px) !important;
+    box-shadow: var(--menu-print-border-shadow, none) !important;
     color: #111827 !important;
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
     page-break-after: always;
+    position: relative !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
