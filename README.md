@@ -23,6 +23,7 @@ The app is built as a static Svelte 5 site with runes, Tailwind CSS, and Flowbit
 - CSV import for bulk menu item entry.
 - Browser local autosave.
 - Mobile editor/preview switching and keyboard-visible focus states.
+- Print page setup controls for page size, orientation, margins, columns, spacing, and layout warnings.
 - Print-focused menu output.
 
 ## Data And Privacy

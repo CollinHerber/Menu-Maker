@@ -88,6 +88,8 @@ textarea {
   background: var(--menu-bg, #fffdf8) !important;
   color: var(--menu-text, #172033);
   font-family: var(--menu-body-font, var(--font-sans));
+  padding: var(--print-preview-padding, 1.5rem) !important;
+  aspect-ratio: var(--print-preview-aspect, auto);
 }
 
 .menu-print-preview .menu-print-header {

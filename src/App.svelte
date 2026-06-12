@@ -11,6 +11,7 @@
     DollarSign,
     Eye,
     FileSpreadsheet,
+    FileText,
     Globe,
     Image,
     LayoutTemplate,
@@ -33,6 +34,18 @@
   type LogoPlacement = 'above-eyebrow' | 'below-eyebrow' | 'left-eyebrow' | 'right-eyebrow';
   type SectionColumnSpan = 1 | 2;
   type StylePresetId = 'simple' | 'elegant' | 'professional' | 'hometown';
+  type PrintPageSize = 'letter' | 'a4';
+  type PrintOrientation = 'portrait' | 'landscape';
+  type PrintMargin = 'compact' | 'standard' | 'wide';
+  type PrintDensity = 'comfortable' | 'compact';
+
+  type PrintSettings = {
+    pageSize: PrintPageSize;
+    orientation: PrintOrientation;
+    margin: PrintMargin;
+    columns: SectionColumnSpan;
+    density: PrintDensity;
+  };
 
   type MenuItem = {
     id: string;
@@ -62,6 +75,7 @@
     qrCodeUrl: string;
     qrCodeLabel: string;
     stylePresetId: StylePresetId;
+    printSettings: PrintSettings;
     logoDataUrl: string;
     logoName: string;
     logoPlacement: LogoPlacement;
@@ -121,6 +135,35 @@
 
   const storageKey = 'menumaker:draft:v1';
   const draftFileSchemaVersion = 1;
+
+  const defaultPrintSettings = (): PrintSettings => ({
+    pageSize: 'letter',
+    orientation: 'portrait',
+    margin: 'standard',
+    columns: 2,
+    density: 'comfortable',
+  });
+
+  const printPageSizes: Record<PrintPageSize, { label: string; width: number; height: number; cssSize: string }> = {
+    letter: { label: 'Letter', width: 8.5, height: 11, cssSize: 'letter' },
+    a4: { label: 'A4', width: 8.27, height: 11.69, cssSize: 'A4' },
+  };
+
+  const printMargins: Record<PrintMargin, { label: string; value: string; previewPadding: string }> = {
+    compact: { label: 'Compact', value: '0.35in', previewPadding: '1rem' },
+    standard: { label: 'Standard', value: '0.5in', previewPadding: '1.5rem' },
+    wide: { label: 'Wide', value: '0.75in', previewPadding: '2rem' },
+  };
+
+  const printDensities: Record<PrintDensity, { label: string; itemSpacing: string; sectionSpacing: string }> = {
+    comfortable: { label: 'Comfortable', itemSpacing: '1rem', sectionSpacing: '2rem' },
+    compact: { label: 'Compact', itemSpacing: '0.7rem', sectionSpacing: '1.35rem' },
+  };
+  const printPageSizeOptions: PrintPageSize[] = ['letter', 'a4'];
+  const printOrientationOptions: PrintOrientation[] = ['portrait', 'landscape'];
+  const printMarginOptions: PrintMargin[] = ['compact', 'standard', 'wide'];
+  const printDensityOptions: PrintDensity[] = ['comfortable', 'compact'];
+  const printColumnOptions: SectionColumnSpan[] = [1, 2];
 
   const stylePresets: StylePreset[] = [
     {
@@ -243,6 +286,7 @@
     qrCodeUrl: 'https://example.com/order',
     qrCodeLabel: 'Scan for online ordering',
     stylePresetId: 'simple',
+    printSettings: defaultPrintSettings(),
     logoDataUrl: '',
     logoName: '',
     logoPlacement: 'above-eyebrow',
@@ -926,6 +970,25 @@
     return 'simple';
   };
 
+  const normalizePrintSettings = (value: unknown): PrintSettings => {
+    const defaults = defaultPrintSettings();
+    if (!isRecord(value)) return defaults;
+
+    return {
+      pageSize: value.pageSize === 'a4' || value.pageSize === 'letter' ? value.pageSize : defaults.pageSize,
+      orientation:
+        value.orientation === 'landscape' || value.orientation === 'portrait'
+          ? value.orientation
+          : defaults.orientation,
+      margin:
+        value.margin === 'compact' || value.margin === 'standard' || value.margin === 'wide'
+          ? value.margin
+          : defaults.margin,
+      columns: value.columns === 1 || value.columns === 2 ? value.columns : defaults.columns,
+      density: value.density === 'compact' || value.density === 'comfortable' ? value.density : defaults.density,
+    };
+  };
+
   const normalizeSectionColumnSpan = (span: unknown, sectionName: string): SectionColumnSpan => {
     if (span === 1 || span === 2) return span;
     return defaultSectionColumnSpan(sectionName);
@@ -967,6 +1030,7 @@
     qrCodeUrl: '',
     qrCodeLabel: '',
     stylePresetId: 'simple',
+    printSettings: defaultPrintSettings(),
     logoDataUrl: '',
     logoName: '',
     logoPlacement: 'above-eyebrow',
@@ -1157,6 +1221,7 @@
       logoName: normalizeTextField(value.logoName),
       logoPlacement: normalizeLogoPlacement(value.logoPlacement),
       stylePresetId: normalizeStylePresetId(value.stylePresetId),
+      printSettings: normalizePrintSettings(value.printSettings),
       sections: value.sections.map(normalizeImportedSection),
     };
 
@@ -1193,6 +1258,7 @@
       };
       loadedMenu.logoPlacement = normalizeLogoPlacement(parsedMenu.logoPlacement);
       loadedMenu.stylePresetId = normalizeStylePresetId(parsedMenu.stylePresetId);
+      loadedMenu.printSettings = normalizePrintSettings(parsedMenu.printSettings);
       optionalDetailFields.forEach((field) => {
         loadedMenu[field] = normalizeTextField(parsedMenu[field]);
       });
@@ -1258,6 +1324,72 @@
       .map(([key, value]) => `${key}: ${value};`)
       .join(' '),
   );
+  let selectedPrintPageSize = $derived(printPageSizes[menu.printSettings.pageSize]);
+  let selectedPrintMargin = $derived(printMargins[menu.printSettings.margin]);
+  let selectedPrintDensity = $derived(printDensities[menu.printSettings.density]);
+  let printPageWidth = $derived(
+    menu.printSettings.orientation === 'portrait' ? selectedPrintPageSize.width : selectedPrintPageSize.height,
+  );
+  let printPageHeight = $derived(
+    menu.printSettings.orientation === 'portrait' ? selectedPrintPageSize.height : selectedPrintPageSize.width,
+  );
+  let printSetupVariables = $derived(
+    [
+      `--print-preview-aspect: ${printPageWidth} / ${printPageHeight};`,
+      `--print-preview-padding: ${selectedPrintMargin.previewPadding};`,
+      `--print-grid-columns: ${menu.printSettings.columns};`,
+      `--menu-item-spacing: ${selectedPrintDensity.itemSpacing};`,
+      `--menu-section-spacing: ${selectedPrintDensity.sectionSpacing};`,
+    ].join(' '),
+  );
+  let previewStyleVariables = $derived(`${activeStyleVariables} ${printSetupVariables}`);
+  let printPageCss = $derived(`
+@media print {
+  @page {
+    size: ${selectedPrintPageSize.cssSize} ${menu.printSettings.orientation};
+    margin: ${selectedPrintMargin.value};
+  }
+
+  .menu-print-grid {
+    grid-template-columns: repeat(${menu.printSettings.columns}, minmax(0, 1fr)) !important;
+  }
+}
+`);
+  let printWarnings = $derived.by(() => {
+    const warnings: string[] = [];
+    const largestSectionItemCount = Math.max(...menu.sections.map((section) => section.items.length), 0);
+
+    if (itemCount > 22 && menu.printSettings.density === 'comfortable') {
+      warnings.push('This menu has many items. Compact spacing may reduce awkward page breaks.');
+    }
+
+    if (itemCount > 14 && menu.printSettings.columns === 1) {
+      warnings.push('One-column printing may create a longer menu for this item count.');
+    }
+
+    if (largestSectionItemCount > 8) {
+      warnings.push('One section has many items and may split across pages.');
+    }
+
+    if (hasMenuFooter && menu.printSettings.margin === 'compact') {
+      warnings.push('Compact margins may crowd footer notes or QR codes.');
+    }
+
+    return warnings;
+  });
+
+  $effect(() => {
+    const styleElementId = 'menumaker-print-page-setup';
+    let styleElement = document.getElementById(styleElementId) as HTMLStyleElement | null;
+
+    if (!styleElement) {
+      styleElement = document.createElement('style');
+      styleElement.id = styleElementId;
+      document.head.append(styleElement);
+    }
+
+    styleElement.textContent = printPageCss;
+  });
 
   const toWebsiteHref = (value: string) => {
     const trimmedValue = value.trim();
@@ -2083,6 +2215,128 @@
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex items-start gap-3">
           <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <FileText class="h-5 w-5" />
+          </span>
+          <div>
+            <h2 class="text-xl font-semibold text-slate-950">Print setup</h2>
+            <p class="mt-1 text-sm text-slate-600">Choose page options before opening the browser print dialog.</p>
+          </div>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <fieldset>
+            <legend class="text-sm font-medium text-slate-700">Page size</legend>
+            <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+              {#each printPageSizeOptions as pageSize}
+                <button
+                  aria-pressed={menu.printSettings.pageSize === pageSize}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.printSettings.pageSize === pageSize ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-print-setting={`page-size-${pageSize}`}
+                  type="button"
+                  onclick={() => (menu.printSettings.pageSize = pageSize)}
+                >
+                  {printPageSizes[pageSize].label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-medium text-slate-700">Orientation</legend>
+            <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+              {#each printOrientationOptions as orientation}
+                <button
+                  aria-pressed={menu.printSettings.orientation === orientation}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium capitalize transition ${
+                    menu.printSettings.orientation === orientation
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-print-setting={`orientation-${orientation}`}
+                  type="button"
+                  onclick={() => (menu.printSettings.orientation = orientation)}
+                >
+                  {orientation}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-medium text-slate-700">Margins</legend>
+            <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+              {#each printMarginOptions as margin}
+                <button
+                  aria-pressed={menu.printSettings.margin === margin}
+                  class={`min-h-10 rounded-md px-2 py-2 text-sm font-medium transition ${
+                    menu.printSettings.margin === margin ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-print-setting={`margin-${margin}`}
+                  type="button"
+                  onclick={() => (menu.printSettings.margin = margin)}
+                >
+                  {printMargins[margin].label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-medium text-slate-700">Columns</legend>
+            <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+              {#each printColumnOptions as columns}
+                <button
+                  aria-pressed={menu.printSettings.columns === columns}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.printSettings.columns === columns ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-print-setting={`columns-${columns}`}
+                  type="button"
+                  onclick={() => (menu.printSettings.columns = columns)}
+                >
+                  {columns} column{columns === 1 ? '' : 's'}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset class="lg:col-span-2">
+            <legend class="text-sm font-medium text-slate-700">Spacing</legend>
+            <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+              {#each printDensityOptions as density}
+                <button
+                  aria-pressed={menu.printSettings.density === density}
+                  class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    menu.printSettings.density === density ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  data-print-setting={`density-${density}`}
+                  type="button"
+                  onclick={() => (menu.printSettings.density = density)}
+                >
+                  {printDensities[density].label}
+                </button>
+              {/each}
+            </div>
+          </fieldset>
+        </div>
+
+        {#if printWarnings.length > 0}
+          <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4" role="status" aria-live="polite">
+            <h3 class="text-sm font-semibold text-amber-950">Layout warnings</h3>
+            <ul class="mt-2 space-y-1 text-sm leading-6 text-amber-800">
+              {#each printWarnings as warning}
+                <li>{warning}</li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
+
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-start gap-3">
+          <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
             <MapPin class="h-5 w-5" />
           </span>
           <div>
@@ -2441,7 +2695,7 @@
         <div
           bind:this={previewElement}
           class={`menu-print-preview ${activeStylePreset.previewClass} rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-inner sm:p-8`}
-          style={activeStyleVariables}
+          style={previewStyleVariables}
         >
           <div class="menu-print-header relative border-b border-slate-300 pb-6 text-center">
             {#if hasLogo && menu.logoPlacement === 'left-eyebrow'}
@@ -2531,9 +2785,15 @@
             {/if}
           </div>
 
-          <div class="menu-print-grid mt-6 grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2">
+          <div
+            class="menu-print-grid mt-6 grid gap-x-8 gap-y-8"
+            style={`grid-template-columns: repeat(${menu.printSettings.columns}, minmax(0, 1fr));`}
+          >
             {#each menu.sections as section (section.id)}
-              <section class="menu-print-section" style={`--section-column-span: ${section.columnSpan};`}>
+              <section
+                class="menu-print-section"
+                style={`--section-column-span: ${Math.min(section.columnSpan, menu.printSettings.columns)};`}
+              >
                 <h4
                   class="menu-print-section-heading mb-4 flex items-center gap-3 text-lg font-semibold uppercase tracking-[0.12em] text-slate-900"
                 >
