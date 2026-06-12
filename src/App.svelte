@@ -12,12 +12,14 @@
     Eye,
     Globe,
     Image,
+    LayoutTemplate,
     MapPin,
     Phone,
     Plus,
     Printer,
     QrCode,
     RotateCcw,
+    Sparkles,
     StickyNote,
     Trash2,
     Upload,
@@ -66,6 +68,26 @@
     schemaVersion: 1;
     exportedAt: string;
     draft: MenuDraft;
+  };
+
+  type TemplateMenuItem = Omit<MenuItem, 'id'>;
+
+  type TemplateSection = {
+    name: string;
+    columnSpan?: SectionColumnSpan;
+    items: TemplateMenuItem[];
+  };
+
+  type MenuTemplate = {
+    id: string;
+    name: string;
+    description: string;
+    bestFor: string;
+    defaultName: string;
+    subtitle: string;
+    eyebrow: string;
+    footerNote?: string;
+    sections: TemplateSection[];
   };
 
   const storageKey = 'menumaker:draft:v1';
@@ -221,6 +243,549 @@
     ],
   });
 
+  const menuTemplates: MenuTemplate[] = [
+    {
+      id: 'diner',
+      name: 'Classic diner',
+      description: 'A familiar all-day layout with breakfast, burgers, plates, and sides.',
+      bestFor: 'diners, grills, cafes with broad menus',
+      defaultName: 'Main Street Diner',
+      subtitle: 'All-day favorites made fresh',
+      eyebrow: "Today's Menu",
+      footerNote: 'Ask your server about daily soups, pies, and blue plate specials.',
+      sections: [
+        {
+          name: 'Breakfast Classics',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Two Egg Breakfast',
+              description: 'Two eggs, breakfast potatoes, toast, and choice of bacon or sausage',
+              price: '10.99',
+            },
+            {
+              name: 'Buttermilk Pancakes',
+              description: 'Three pancakes with whipped butter and maple syrup',
+              price: '9.99',
+            },
+          ],
+        },
+        {
+          name: 'Burgers & Sandwiches',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Diner Cheeseburger',
+              description: 'American cheese, lettuce, tomato, onion, pickle, and house sauce',
+              price: '12.99',
+            },
+            {
+              name: 'Turkey Club',
+              description: 'Roasted turkey, bacon, lettuce, tomato, and mayo on toast',
+              price: '11.99',
+            },
+          ],
+        },
+        {
+          name: 'Plates & Sides',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Chicken Fried Steak',
+              description: 'Country gravy, mashed potatoes, and green beans',
+              price: '15.99',
+            },
+            {
+              name: 'Crispy Fries',
+              description: 'Basket of golden fries with house seasoning',
+              price: '4.99',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'cafe',
+      name: 'Neighborhood cafe',
+      description: 'Coffee, bakery, breakfast, and light lunch sections for a relaxed cafe.',
+      bestFor: 'coffee shops, bakeries, lunch cafes',
+      defaultName: 'Corner Cafe',
+      subtitle: 'Coffee, pastries, and simple comforts',
+      eyebrow: 'Cafe Menu',
+      footerNote: 'Milk alternatives and gluten-free options available on request.',
+      sections: [
+        {
+          name: 'Coffee & Espresso',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Latte',
+              description: 'Espresso with steamed milk and a light layer of foam',
+              price: '4.75',
+            },
+            {
+              name: 'Cold Brew',
+              description: 'Slow-steeped coffee served over ice',
+              price: '4.50',
+            },
+          ],
+        },
+        {
+          name: 'Bakery',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Blueberry Muffin',
+              description: 'House-baked muffin with fresh blueberries',
+              price: '3.99',
+            },
+            {
+              name: 'Cinnamon Roll',
+              description: 'Soft roll with cream cheese icing',
+              price: '4.99',
+            },
+          ],
+        },
+        {
+          name: 'Breakfast & Lunch',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Avocado Toast',
+              description: 'Sourdough, smashed avocado, tomato, herbs, and lemon',
+              price: '9.99',
+            },
+            {
+              name: 'Chicken Salad Croissant',
+              description: 'House chicken salad, lettuce, and tomato on a butter croissant',
+              price: '11.49',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'bar',
+      name: 'Bar & grill',
+      description: 'Shareables, handhelds, cocktails, and beer-friendly menu structure.',
+      bestFor: 'bars, pubs, taverns, sports grills',
+      defaultName: 'The Local Tap',
+      subtitle: 'Shareables, handhelds, and cold drinks',
+      eyebrow: 'Bar Menu',
+      footerNote: 'Happy hour specials available Monday through Friday.',
+      sections: [
+        {
+          name: 'Shareables',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Loaded Nachos',
+              description: 'Tortilla chips, queso, jalapenos, pico, sour cream, and salsa',
+              price: '12.99',
+            },
+            {
+              name: 'Wings',
+              description: 'Crispy wings tossed in buffalo, barbecue, or garlic parmesan',
+              price: '13.99',
+            },
+          ],
+        },
+        {
+          name: 'Burgers & Handhelds',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Pub Burger',
+              description: 'Cheddar, onion jam, lettuce, tomato, and pub sauce',
+              price: '14.99',
+            },
+            {
+              name: 'Fish Tacos',
+              description: 'Beer-battered fish, slaw, crema, and lime',
+              price: '13.49',
+            },
+          ],
+        },
+        {
+          name: 'Cocktails',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'House Old Fashioned',
+              description: 'Bourbon, bitters, sugar, orange, and cherry',
+              price: '10.00',
+            },
+            {
+              name: 'Spicy Margarita',
+              description: 'Tequila, lime, orange liqueur, and jalapeno',
+              price: '11.00',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'pizza-shop',
+      name: 'Pizza shop',
+      description: 'Pizza-forward template with starters, salads, specialty pies, and add-ons.',
+      bestFor: 'pizzerias, carryout shops, family restaurants',
+      defaultName: "Tony's Pizza",
+      subtitle: 'Hand-tossed pies and neighborhood favorites',
+      eyebrow: 'Pizza Menu',
+      footerNote: 'Build your own pizza with your favorite toppings.',
+      sections: [
+        {
+          name: 'Starters',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Garlic Knots',
+              description: 'Baked knots tossed with garlic butter and parmesan',
+              price: '6.99',
+            },
+            {
+              name: 'Mozzarella Sticks',
+              description: 'Fried mozzarella served with marinara',
+              price: '8.99',
+            },
+          ],
+        },
+        {
+          name: 'Specialty Pizzas',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Margherita',
+              description: 'Fresh mozzarella, tomato, basil, and olive oil',
+              price: '15.99',
+            },
+            {
+              name: 'Supreme',
+              description: 'Pepperoni, sausage, peppers, onions, mushrooms, and olives',
+              price: '18.99',
+            },
+          ],
+        },
+        {
+          name: 'Salads & Sides',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'House Salad',
+              description: 'Mixed greens, tomato, cucumber, onion, and house dressing',
+              price: '7.99',
+            },
+            {
+              name: 'Extra Toppings',
+              description: 'Pepperoni, sausage, mushrooms, peppers, onions, olives, or jalapenos',
+              price: '1.50',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'food-truck',
+      name: 'Food truck',
+      description: 'Compact, fast-moving layout for signature items, sides, and drinks.',
+      bestFor: 'food trucks, pop-ups, festivals, quick service',
+      defaultName: 'Rolling Kitchen',
+      subtitle: 'Fast, fresh, and made to order',
+      eyebrow: 'Truck Menu',
+      footerNote: 'Follow us online for weekly stops and limited specials.',
+      sections: [
+        {
+          name: 'Street Tacos',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Carne Asada Taco',
+              description: 'Grilled steak, onion, cilantro, salsa verde, and lime',
+              price: '4.50',
+            },
+            {
+              name: 'Crispy Fish Taco',
+              description: 'Fried fish, slaw, chipotle crema, and pico',
+              price: '4.75',
+            },
+          ],
+        },
+        {
+          name: 'Handhelds',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Smash Burger',
+              description: 'Double patty, American cheese, pickles, and truck sauce',
+              price: '11.99',
+            },
+            {
+              name: 'Chicken Rice Bowl',
+              description: 'Grilled chicken, rice, beans, salsa, and crema',
+              price: '12.49',
+            },
+          ],
+        },
+        {
+          name: 'Sides & Drinks',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Elote Cup',
+              description: 'Street corn, cotija, crema, chili, and lime',
+              price: '5.99',
+            },
+            {
+              name: 'Agua Fresca',
+              description: 'Rotating seasonal fruit drink',
+              price: '3.99',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'fine-dining',
+      name: 'Fine dining',
+      description: 'Minimal, polished sections for starters, entrees, desserts, and pairings.',
+      bestFor: 'upscale restaurants, prix fixe menus, date-night venues',
+      defaultName: 'Atelier Table',
+      subtitle: 'Seasonal dining with thoughtful pairings',
+      eyebrow: 'Dinner Menu',
+      footerNote: 'Wine pairings are available for each course.',
+      sections: [
+        {
+          name: 'Starters',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Burrata',
+              description: 'Roasted tomatoes, basil oil, aged balsamic, and grilled bread',
+              price: '15.00',
+            },
+            {
+              name: 'Seared Scallops',
+              description: 'Cauliflower puree, brown butter, capers, and herbs',
+              price: '18.00',
+            },
+          ],
+        },
+        {
+          name: 'Entrees',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Braised Short Rib',
+              description: 'Potato puree, glazed carrots, pearl onions, and red wine jus',
+              price: '34.00',
+            },
+            {
+              name: 'Pan-Roasted Salmon',
+              description: 'Lemon risotto, asparagus, dill, and beurre blanc',
+              price: '29.00',
+            },
+          ],
+        },
+        {
+          name: 'Desserts',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Chocolate Torte',
+              description: 'Dark chocolate, espresso cream, and toasted hazelnut',
+              price: '11.00',
+            },
+            {
+              name: 'Lemon Panna Cotta',
+              description: 'Vanilla cream, lemon curd, and shortbread crumble',
+              price: '10.00',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'brunch',
+      name: 'Brunch',
+      description: 'Weekend-friendly template with savory plates, sweet griddle items, and drinks.',
+      bestFor: 'brunch spots, cafes, event menus',
+      defaultName: 'Sunday Brunch Co.',
+      subtitle: 'Late mornings, fresh coffee, and weekend plates',
+      eyebrow: 'Brunch Menu',
+      footerNote: 'Brunch served Saturday and Sunday until 2 PM.',
+      sections: [
+        {
+          name: 'Brunch Plates',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Eggs Benedict',
+              description: 'Poached eggs, ham, English muffin, hollandaise, and potatoes',
+              price: '14.99',
+            },
+            {
+              name: 'Veggie Hash',
+              description: 'Seasonal vegetables, potatoes, eggs, and herb sauce',
+              price: '13.49',
+            },
+          ],
+        },
+        {
+          name: 'Sweet Griddle',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'French Toast',
+              description: 'Brioche, cinnamon custard, berries, and maple syrup',
+              price: '12.49',
+            },
+            {
+              name: 'Lemon Ricotta Pancakes',
+              description: 'Fluffy pancakes with lemon curd and powdered sugar',
+              price: '12.99',
+            },
+          ],
+        },
+        {
+          name: 'Brunch Drinks',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Mimosa',
+              description: 'Sparkling wine and orange juice',
+              price: '8.00',
+            },
+            {
+              name: 'Bloody Mary',
+              description: 'Vodka, tomato, spice blend, and house garnish',
+              price: '9.00',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'drinks',
+      name: 'Drinks menu',
+      description: 'Dedicated drinks layout for coffee, cocktails, beer, wine, and zero-proof options.',
+      bestFor: 'bars, cafes, beverage menus, event drink lists',
+      defaultName: 'The Pour List',
+      subtitle: 'Coffee, cocktails, beer, wine, and zero-proof sips',
+      eyebrow: 'Drinks',
+      footerNote: 'Ask about seasonal pours and rotating taps.',
+      sections: [
+        {
+          name: 'Coffee & Tea',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Americano',
+              description: 'Espresso and hot water',
+              price: '3.75',
+            },
+            {
+              name: 'Chai Latte',
+              description: 'Spiced tea concentrate with steamed milk',
+              price: '4.75',
+            },
+          ],
+        },
+        {
+          name: 'Cocktails',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Cucumber Collins',
+              description: 'Gin, cucumber, lemon, soda, and mint',
+              price: '11.00',
+            },
+            {
+              name: 'Maple Whiskey Sour',
+              description: 'Whiskey, lemon, maple, bitters, and egg white',
+              price: '12.00',
+            },
+          ],
+        },
+        {
+          name: 'Beer & Wine',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Local Draft',
+              description: 'Rotating selection from nearby breweries',
+              price: '7.00',
+            },
+            {
+              name: 'House Red or White',
+              description: 'Ask for today\'s pour',
+              price: '9.00',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'desserts',
+      name: 'Dessert menu',
+      description: 'Sweet-focused template for cakes, pies, frozen treats, and dessert drinks.',
+      bestFor: 'bakeries, dessert shops, restaurants with dessert cards',
+      defaultName: 'Sweet Finish',
+      subtitle: 'Desserts, coffee, and after-dinner treats',
+      eyebrow: 'Desserts',
+      footerNote: 'Whole cakes and catering trays are available with advance notice.',
+      sections: [
+        {
+          name: 'Cakes & Pies',
+          columnSpan: 2,
+          items: [
+            {
+              name: 'Carrot Cake',
+              description: 'Spiced cake, cream cheese frosting, and toasted walnuts',
+              price: '7.99',
+            },
+            {
+              name: 'Key Lime Pie',
+              description: 'Graham crust, tart lime filling, and whipped cream',
+              price: '6.99',
+            },
+          ],
+        },
+        {
+          name: 'Frozen Treats',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Vanilla Bean Sundae',
+              description: 'Vanilla ice cream, chocolate sauce, whipped cream, and cherry',
+              price: '6.49',
+            },
+            {
+              name: 'Seasonal Sorbet',
+              description: 'Refreshing fruit sorbet made with seasonal flavors',
+              price: '5.99',
+            },
+          ],
+        },
+        {
+          name: 'Dessert Drinks',
+          columnSpan: 1,
+          items: [
+            {
+              name: 'Espresso',
+              description: 'Fresh-pulled single or double shot',
+              price: '3.50',
+            },
+            {
+              name: 'Hot Chocolate',
+              description: 'Rich cocoa with whipped cream',
+              price: '4.50',
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
   const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -265,6 +830,36 @@
     'qrCodeUrl',
     'qrCodeLabel',
   ] as const satisfies readonly (keyof MenuDraft)[];
+
+  const createDraftFromTemplate = (template: MenuTemplate): MenuDraft => ({
+    name: template.defaultName,
+    subtitle: template.subtitle,
+    eyebrow: template.eyebrow,
+    address: '',
+    phone: '',
+    website: '',
+    hours: '',
+    socialHandle: '',
+    footerNote: template.footerNote ?? '',
+    disclaimer: '',
+    qrCodeUrl: '',
+    qrCodeLabel: '',
+    logoDataUrl: '',
+    logoName: '',
+    logoPlacement: 'above-eyebrow',
+    sections: template.sections.map((section) => ({
+      id: createId(),
+      name: section.name,
+      columnSpan: section.columnSpan ?? defaultSectionColumnSpan(section.name),
+      items: section.items.map((item) => createItem(item)),
+    })),
+  });
+
+  const templateItemCount = (template: MenuTemplate) =>
+    template.sections.reduce((count, section) => count + section.items.length, 0);
+
+  const templateSectionSummary = (template: MenuTemplate) =>
+    template.sections.map((section) => section.name).join(', ');
 
   const normalizeImportedItem = (value: unknown, itemIndex: number, sectionIndex: number): MenuItem => {
     if (!isRecord(value)) {
@@ -370,6 +965,8 @@
   let selectedSectionId = $state(initialMenu.sections[0]?.id ?? '');
   let newSectionName = $state('');
   let sectionModalOpen = $state(false);
+  let templateModalOpen = $state(false);
+  let pendingTemplateId = $state('');
   let previewElement = $state<HTMLDivElement | null>(null);
   let qrCodeDataUrl = $state('');
   let qrCodeError = $state('');
@@ -459,6 +1056,29 @@
 
   const selectSection = (sectionId: string) => {
     selectedSectionId = sectionId;
+  };
+
+  const openTemplateModal = () => {
+    pendingTemplateId = '';
+    templateModalOpen = true;
+  };
+
+  const requestTemplateApply = (template: MenuTemplate) => {
+    pendingTemplateId = template.id;
+  };
+
+  const cancelTemplateApply = () => {
+    pendingTemplateId = '';
+  };
+
+  const applyTemplate = (template: MenuTemplate) => {
+    const templatedMenu = createDraftFromTemplate(template);
+    menu = templatedMenu;
+    selectedSectionId = templatedMenu.sections[0]?.id ?? '';
+    templateModalOpen = false;
+    pendingTemplateId = '';
+    draftFileError = '';
+    draftFileStatus = `Applied ${template.name} template.`;
   };
 
   const openSectionModal = () => {
@@ -600,6 +1220,8 @@
     selectedSectionId = defaultMenu.sections[0]?.id ?? '';
     newSectionName = '';
     sectionModalOpen = false;
+    templateModalOpen = false;
+    pendingTemplateId = '';
     draftFileError = '';
     draftFileStatus = '';
   };
@@ -614,6 +1236,74 @@
 <svelte:head>
   <title>{menu.name || 'MenuMaker'}</title>
 </svelte:head>
+
+<Modal bind:open={templateModalOpen} size="xl" title="Choose a template">
+  <div class="space-y-5">
+    <div class="flex items-start gap-3 rounded-lg border border-brand-100 bg-brand-50 p-4">
+      <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-700 shadow-sm">
+        <Sparkles class="h-5 w-5" />
+      </span>
+      <div>
+        <h2 class="text-lg font-semibold text-slate-950">Start with a ready-made structure</h2>
+        <p class="mt-1 text-sm leading-6 text-slate-700">
+          Templates replace the current draft with editable sections and sample items. You can change everything after applying one.
+        </p>
+      </div>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+      {#each menuTemplates as template (template.id)}
+        <article class="flex flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-template-id={template.id}>
+          <div class="flex-1">
+            <div class="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 class="text-base font-semibold text-slate-950">{template.name}</h3>
+                <p class="mt-1 text-sm leading-6 text-slate-600">{template.description}</p>
+              </div>
+              <span class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800">
+                {template.sections.length} sections
+              </span>
+            </div>
+
+            <dl class="grid gap-3 text-sm text-slate-600">
+              <div>
+                <dt class="font-medium text-slate-800">Best for</dt>
+                <dd class="mt-1">{template.bestFor}</dd>
+              </div>
+              <div>
+                <dt class="font-medium text-slate-800">Includes</dt>
+                <dd class="mt-1">
+                  {templateItemCount(template)} sample items across {templateSectionSummary(template)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          {#if pendingTemplateId === template.id}
+            <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p class="text-sm font-medium text-amber-950">Replace the current menu with this template?</p>
+              <p class="mt-1 text-sm text-amber-800">Your current draft will be overwritten after confirmation.</p>
+              <div class="mt-3 flex flex-wrap justify-end gap-2">
+                <Button color="light" onclick={cancelTemplateApply}>Cancel</Button>
+                <Button data-template-action={`replace-${template.id}`} onclick={() => applyTemplate(template)}>
+                  <LayoutTemplate class="mr-2 h-4 w-4" />
+                  Replace menu
+                </Button>
+              </div>
+            </div>
+          {:else}
+            <div class="mt-4 flex justify-end border-t border-slate-200 pt-4">
+              <Button data-template-action={`use-${template.id}`} onclick={() => requestTemplateApply(template)}>
+                <LayoutTemplate class="mr-2 h-4 w-4" />
+                Use template
+              </Button>
+            </div>
+          {/if}
+        </article>
+      {/each}
+    </div>
+  </div>
+</Modal>
 
 <Modal bind:open={sectionModalOpen} size="sm" title="Add section">
   <form
@@ -658,6 +1348,10 @@
         </div>
         <div class="flex flex-col gap-2 sm:items-end">
           <div class="flex flex-wrap items-end gap-2">
+            <Button color="light" onclick={openTemplateModal}>
+              <LayoutTemplate class="mr-2 h-4 w-4" />
+              Templates
+            </Button>
             <Button color="light" onclick={exportDraft}>
               <Download class="mr-2 h-4 w-4" />
               Export draft
