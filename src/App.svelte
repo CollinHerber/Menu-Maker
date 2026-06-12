@@ -10,6 +10,7 @@
     Download,
     DollarSign,
     Eye,
+    FileSpreadsheet,
     Globe,
     Image,
     LayoutTemplate,
@@ -88,6 +89,21 @@
     eyebrow: string;
     footerNote?: string;
     sections: TemplateSection[];
+  };
+
+  type CsvImportMode = 'append' | 'replace';
+
+  type CsvPreviewRow = {
+    rowNumber: number;
+    section: string;
+    name: string;
+    description: string;
+    price: string;
+  };
+
+  type CsvPreviewSectionSummary = {
+    section: string;
+    itemCount: number;
   };
 
   const storageKey = 'menumaker:draft:v1';
@@ -861,6 +877,129 @@
   const templateSectionSummary = (template: MenuTemplate) =>
     template.sections.map((section) => section.name).join(', ');
 
+  const parseCsvRows = (text: string) => {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentCell = '';
+    let inQuotes = false;
+
+    for (let index = 0; index < text.length; index += 1) {
+      const character = text[index];
+      const nextCharacter = text[index + 1];
+
+      if (character === '"') {
+        if (inQuotes && nextCharacter === '"') {
+          currentCell += '"';
+          index += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+
+      if (character === ',' && !inQuotes) {
+        currentRow.push(currentCell);
+        currentCell = '';
+        continue;
+      }
+
+      if ((character === '\n' || character === '\r') && !inQuotes) {
+        if (character === '\r' && nextCharacter === '\n') index += 1;
+        currentRow.push(currentCell);
+        rows.push(currentRow);
+        currentRow = [];
+        currentCell = '';
+        continue;
+      }
+
+      currentCell += character;
+    }
+
+    if (inQuotes) {
+      throw new Error('CSV has an unclosed quoted field.');
+    }
+
+    currentRow.push(currentCell);
+    rows.push(currentRow);
+
+    return rows.filter((row) => row.some((cell) => cell.trim().length > 0));
+  };
+
+  const parseCsvImport = (text: string): CsvPreviewRow[] => {
+    const rows = parseCsvRows(text);
+    if (rows.length < 2) {
+      throw new Error('CSV must include a header row and at least one menu item row.');
+    }
+
+    const headers = rows[0].map((header) => header.trim().toLowerCase());
+    const sectionIndex = headers.indexOf('section');
+    const nameIndex = headers.indexOf('name');
+    const descriptionIndex = headers.indexOf('description');
+    const priceIndex = headers.indexOf('price');
+
+    if (sectionIndex < 0) {
+      throw new Error('CSV header must include a section column.');
+    }
+
+    if (nameIndex < 0) {
+      throw new Error('CSV header must include a name column.');
+    }
+
+    return rows.slice(1).map((row, index) => {
+      const rowNumber = index + 2;
+      const section = (row[sectionIndex] ?? '').trim();
+      const name = (row[nameIndex] ?? '').trim();
+
+      if (!section) {
+        throw new Error(`Row ${rowNumber} is missing a section.`);
+      }
+
+      if (!name) {
+        throw new Error(`Row ${rowNumber} is missing an item name.`);
+      }
+
+      return {
+        rowNumber,
+        section,
+        name,
+        description: descriptionIndex >= 0 ? (row[descriptionIndex] ?? '').trim() : '',
+        price: priceIndex >= 0 ? (row[priceIndex] ?? '').trim() : '',
+      };
+    });
+  };
+
+  const sectionsFromCsvRows = (rows: CsvPreviewRow[]): MenuSection[] => {
+    const sections = new Map<string, MenuSection>();
+
+    rows.forEach((row) => {
+      const existingSection = sections.get(row.section);
+      const section =
+        existingSection ??
+        createSection(row.section, defaultSectionColumnSpan(row.section));
+
+      section.items.push(
+        createItem({
+          name: row.name,
+          description: row.description,
+          price: row.price,
+        }),
+      );
+      sections.set(row.section, section);
+    });
+
+    return Array.from(sections.values());
+  };
+
+  const summarizeCsvRows = (rows: CsvPreviewRow[]): CsvPreviewSectionSummary[] => {
+    const sectionCounts = new Map<string, number>();
+
+    rows.forEach((row) => {
+      sectionCounts.set(row.section, (sectionCounts.get(row.section) ?? 0) + 1);
+    });
+
+    return Array.from(sectionCounts, ([section, itemCount]) => ({ section, itemCount }));
+  };
+
   const normalizeImportedItem = (value: unknown, itemIndex: number, sectionIndex: number): MenuItem => {
     if (!isRecord(value)) {
       throw new Error(`Item ${itemIndex + 1} in section ${sectionIndex + 1} is invalid.`);
@@ -966,12 +1105,17 @@
   let newSectionName = $state('');
   let sectionModalOpen = $state(false);
   let templateModalOpen = $state(false);
+  let csvImportModalOpen = $state(false);
   let pendingTemplateId = $state('');
   let previewElement = $state<HTMLDivElement | null>(null);
   let qrCodeDataUrl = $state('');
   let qrCodeError = $state('');
   let draftFileStatus = $state('');
   let draftFileError = $state('');
+  let csvFileName = $state('');
+  let csvImportError = $state('');
+  let csvImportMode = $state<CsvImportMode>('append');
+  let csvPreviewRows = $state<CsvPreviewRow[]>([]);
 
   let selectedSection = $derived(
     menu.sections.find((section) => section.id === selectedSectionId) ?? menu.sections[0],
@@ -994,6 +1138,8 @@
   let hasQrCodeUrl = $derived(menu.qrCodeUrl.trim().length > 0);
   let hasMenuFooter = $derived(hasFooterDetails || hasQrCodeUrl);
   let qrCodeCaption = $derived(menu.qrCodeLabel.trim() || 'Scan for more');
+  let csvPreviewSections = $derived(summarizeCsvRows(csvPreviewRows));
+  let csvPreviewItemCount = $derived(csvPreviewRows.length);
 
   const toWebsiteHref = (value: string) => {
     const trimmedValue = value.trim();
@@ -1185,6 +1331,77 @@
     draftFileStatus = `Exported ${fileName}.`;
   };
 
+  const resetCsvImport = () => {
+    csvFileName = '';
+    csvImportError = '';
+    csvImportMode = 'append';
+    csvPreviewRows = [];
+  };
+
+  const openCsvImportModal = () => {
+    resetCsvImport();
+    csvImportModalOpen = true;
+  };
+
+  const handleCsvImportFile = async (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) return;
+
+    try {
+      const previewRows = parseCsvImport(await file.text());
+      csvFileName = file.name;
+      csvPreviewRows = previewRows;
+      csvImportError = '';
+    } catch (error) {
+      csvFileName = file.name;
+      csvPreviewRows = [];
+      csvImportError = error instanceof Error ? error.message : 'Choose a valid CSV file.';
+    } finally {
+      input.value = '';
+    }
+  };
+
+  const applyCsvImport = () => {
+    if (csvPreviewRows.length === 0) return;
+
+    if (csvImportMode === 'replace') {
+      const shouldReplace = window.confirm('Replace the current menu sections with this CSV import?');
+      if (!shouldReplace) return;
+    }
+
+    const importedSections = sectionsFromCsvRows(csvPreviewRows);
+    let firstAppliedSectionId = '';
+
+    if (csvImportMode === 'replace') {
+      menu.sections = importedSections;
+      firstAppliedSectionId = importedSections[0]?.id ?? '';
+    } else {
+      importedSections.forEach((importedSection) => {
+        const matchingSection = menu.sections.find(
+          (section) => section.name.trim().toLowerCase() === importedSection.name.trim().toLowerCase(),
+        );
+
+        if (matchingSection) {
+          matchingSection.items = [...matchingSection.items, ...importedSection.items];
+          firstAppliedSectionId ||= matchingSection.id;
+        } else {
+          menu.sections = [...menu.sections, importedSection];
+          firstAppliedSectionId ||= importedSection.id;
+        }
+      });
+    }
+
+    selectedSectionId = firstAppliedSectionId || menu.sections[0]?.id || '';
+    csvImportModalOpen = false;
+    draftFileError = '';
+    draftFileStatus = `${csvImportMode === 'replace' ? 'Replaced menu with' : 'Imported'} ${csvPreviewItemCount} CSV item${
+      csvPreviewItemCount === 1 ? '' : 's'
+    } from ${csvFileName}.`;
+    resetCsvImport();
+  };
+
   const handleDraftImport = async (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -1221,7 +1438,9 @@
     newSectionName = '';
     sectionModalOpen = false;
     templateModalOpen = false;
+    csvImportModalOpen = false;
     pendingTemplateId = '';
+    resetCsvImport();
     draftFileError = '';
     draftFileStatus = '';
   };
@@ -1321,6 +1540,136 @@
   </div>
 </Modal>
 
+<Modal bind:open={csvImportModalOpen} size="xl" title="Import CSV">
+  <div class="space-y-5">
+    <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div class="flex items-start gap-3">
+        <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-700 shadow-sm">
+          <FileSpreadsheet class="h-5 w-5" />
+        </span>
+        <div>
+          <h2 class="text-lg font-semibold text-slate-950">Import items from a spreadsheet</h2>
+          <p class="mt-1 text-sm leading-6 text-slate-600">
+            Use a CSV with headers for section and name. Description and price are optional.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-lg bg-white p-3 font-mono text-xs leading-5 text-slate-700 shadow-sm">
+        section,name,description,price<br />
+        Appetizers,Cheese Curds,Golden fried curds,9.99
+      </div>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">CSV file</span>
+        <input
+          class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition file:mr-4 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-800 hover:file:bg-brand-100 focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+          type="file"
+          accept=".csv,text/csv"
+          onchange={handleCsvImportFile}
+        />
+      </label>
+
+      {#if csvPreviewRows.length > 0}
+        <button
+          class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200"
+          type="button"
+          onclick={resetCsvImport}
+        >
+          Clear
+        </button>
+      {/if}
+    </div>
+
+    {#if csvImportError}
+      <p class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" aria-live="polite">
+        {csvImportError}
+      </p>
+    {/if}
+
+    {#if csvPreviewRows.length > 0}
+      <div class="rounded-lg border border-slate-200 bg-white">
+        <div class="border-b border-slate-200 p-4">
+          <h3 class="text-base font-semibold text-slate-950">
+            Preview {csvPreviewItemCount} item{csvPreviewItemCount === 1 ? '' : 's'} from {csvFileName}
+          </h3>
+          <p class="mt-1 text-sm text-slate-600">
+            {csvPreviewSections.length} section{csvPreviewSections.length === 1 ? '' : 's'} detected:
+            {csvPreviewSections.map((section) => `${section.section} (${section.itemCount})`).join(', ')}
+          </p>
+        </div>
+
+        <div class="max-h-72 overflow-auto">
+          <table class="w-full min-w-[42rem] text-left text-sm">
+            <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th class="px-4 py-3 font-semibold">Row</th>
+                <th class="px-4 py-3 font-semibold">Section</th>
+                <th class="px-4 py-3 font-semibold">Name</th>
+                <th class="px-4 py-3 font-semibold">Description</th>
+                <th class="px-4 py-3 font-semibold">Price</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {#each csvPreviewRows as row (row.rowNumber)}
+                <tr>
+                  <td class="whitespace-nowrap px-4 py-3 text-slate-500">{row.rowNumber}</td>
+                  <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{row.section}</td>
+                  <td class="px-4 py-3 text-slate-800">{row.name}</td>
+                  <td class="px-4 py-3 text-slate-600">{row.description || '-'}</td>
+                  <td class="whitespace-nowrap px-4 py-3 text-slate-800">{row.price || '-'}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <fieldset class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <legend class="px-1 text-sm font-medium text-slate-700">Import behavior</legend>
+        <div class="mt-2 grid gap-3 sm:grid-cols-2">
+          <label class="flex gap-3 rounded-lg border border-slate-200 bg-white p-3">
+            <input class="mt-1 h-4 w-4 accent-brand-600" type="radio" bind:group={csvImportMode} value="append" />
+            <span>
+              <span class="block text-sm font-medium text-slate-900">Append to menu</span>
+              <span class="mt-1 block text-sm text-slate-600">Add rows to matching sections or create new ones.</span>
+            </span>
+          </label>
+
+          <label class="flex gap-3 rounded-lg border border-slate-200 bg-white p-3">
+            <input class="mt-1 h-4 w-4 accent-brand-600" type="radio" bind:group={csvImportMode} value="replace" />
+            <span>
+              <span class="block text-sm font-medium text-slate-900">Replace menu sections</span>
+              <span class="mt-1 block text-sm text-slate-600">Clear current sections and use only this CSV.</span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+    {/if}
+
+    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
+      <button
+        class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200"
+        type="button"
+        onclick={() => (csvImportModalOpen = false)}
+      >
+        Cancel
+      </button>
+      <button
+        class="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-50"
+        type="button"
+        disabled={csvPreviewRows.length === 0}
+        onclick={applyCsvImport}
+      >
+        <FileSpreadsheet class="mr-2 h-4 w-4" />
+        Apply CSV
+      </button>
+    </div>
+  </div>
+</Modal>
+
 <Modal bind:open={sectionModalOpen} size="sm" title="Add section">
   <form
     class="space-y-4"
@@ -1371,6 +1720,10 @@
             <Button color="light" onclick={exportDraft}>
               <Download class="mr-2 h-4 w-4" />
               Export draft
+            </Button>
+            <Button color="light" onclick={openCsvImportModal}>
+              <FileSpreadsheet class="mr-2 h-4 w-4" />
+              Import CSV
             </Button>
             <label
               class="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus-within:ring-4 focus-within:ring-brand-200"

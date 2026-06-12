@@ -19,6 +19,7 @@ The app is built as a static Svelte 5 site with runes, Tailwind CSS, and Flowbit
 - Section and menu item management with live preview.
 - Optional restaurant details, hours, website, footer notes, disclaimer text, and QR code.
 - Editable draft import and export for backups or sharing.
+- CSV import for bulk menu item entry.
 - Browser local autosave.
 - Print-focused menu output.
 
