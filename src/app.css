@@ -62,7 +62,22 @@ textarea {
   transform: translateY(0);
 }
 
+.editor-command-group,
+.editor-inspector,
+.editor-tool-rail {
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .editor-topbar {
+    position: sticky;
+    top: 0.75rem;
+    z-index: 30;
+  }
+}
+
 .menu-editor,
+.editor-tool-rail,
 .menu-preview-column,
 .menu-print-preview {
   min-width: 0;
@@ -215,6 +230,9 @@ textarea {
   }
 
   .menu-editor,
+  .mobile-view-switch,
+  .editor-topbar,
+  .editor-tool-rail,
   .print-command {
     display: none !important;
   }

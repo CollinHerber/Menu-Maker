@@ -38,6 +38,7 @@
   type PrintOrientation = 'portrait' | 'landscape';
   type PrintMargin = 'compact' | 'standard' | 'wide';
   type PrintDensity = 'comfortable' | 'compact';
+  type EditorPanelId = 'menu' | 'sections' | 'design' | 'print' | 'details';
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -164,6 +165,13 @@
   const printMarginOptions: PrintMargin[] = ['compact', 'standard', 'wide'];
   const printDensityOptions: PrintDensity[] = ['comfortable', 'compact'];
   const printColumnOptions: SectionColumnSpan[] = [1, 2];
+  const editorPanels: Array<{ id: EditorPanelId; label: string; description: string }> = [
+    { id: 'menu', label: 'Menu', description: 'Name, subtitle, and logo' },
+    { id: 'sections', label: 'Items', description: 'Sections and menu items' },
+    { id: 'design', label: 'Design', description: 'Visual presets' },
+    { id: 'print', label: 'Print', description: 'Page setup' },
+    { id: 'details', label: 'Details', description: 'Contact and QR details' },
+  ];
 
   const stylePresets: StylePreset[] = [
     {
@@ -1278,6 +1286,7 @@
   let menu = $state<MenuDraft>(initialMenu);
   let mobileView = $state<'editor' | 'preview'>('editor');
   let selectedSectionId = $state(initialMenu.sections[0]?.id ?? '');
+  let activeEditorPanel = $state<EditorPanelId>('menu');
   let newSectionName = $state('');
   let sectionModalOpen = $state(false);
   let templateModalOpen = $state(false);
@@ -1452,6 +1461,7 @@
 
   const selectSection = (sectionId: string) => {
     selectedSectionId = sectionId;
+    activeEditorPanel = 'sections';
   };
 
   const openTemplateModal = () => {
@@ -1471,6 +1481,7 @@
     const templatedMenu = createDraftFromTemplate(template);
     menu = templatedMenu;
     selectedSectionId = templatedMenu.sections[0]?.id ?? '';
+    activeEditorPanel = 'sections';
     templateModalOpen = false;
     pendingTemplateId = '';
     draftFileError = '';
@@ -1478,6 +1489,7 @@
   };
 
   const openSectionModal = () => {
+    activeEditorPanel = 'sections';
     newSectionName = '';
     sectionModalOpen = true;
   };
@@ -1489,6 +1501,7 @@
     const section = createSection(sectionName);
     menu.sections.push(section);
     selectedSectionId = section.id;
+    activeEditorPanel = 'sections';
     newSectionName = '';
     sectionModalOpen = false;
   };
@@ -1644,6 +1657,7 @@
     }
 
     selectedSectionId = firstAppliedSectionId || menu.sections[0]?.id || '';
+    activeEditorPanel = 'sections';
     csvImportModalOpen = false;
     draftFileError = '';
     draftFileStatus = `${csvImportMode === 'replace' ? 'Replaced menu with' : 'Imported'} ${csvPreviewItemCount} CSV item${
@@ -1671,6 +1685,7 @@
 
       menu = importedDraft;
       selectedSectionId = importedDraft.sections[0]?.id ?? '';
+      activeEditorPanel = 'menu';
       draftFileError = '';
       draftFileStatus = `Imported ${file.name}.`;
     } catch (error) {
@@ -1685,6 +1700,7 @@
     const defaultMenu = starterMenu();
     menu = defaultMenu;
     selectedSectionId = defaultMenu.sections[0]?.id ?? '';
+    activeEditorPanel = 'menu';
     newSectionName = '';
     sectionModalOpen = false;
     templateModalOpen = false;
@@ -1950,9 +1966,98 @@
 
 <a class="skip-link" href="#menu-editor">Skip to menu editor</a>
 
-<main class="app-shell min-h-screen px-4 py-5 sm:px-6 lg:px-8">
+<main class="app-shell min-h-screen px-4 py-4 sm:px-6 lg:px-8">
+  <header
+    class="editor-topbar mx-auto mb-4 max-w-[92rem] rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur"
+  >
+    <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div class="flex min-w-0 items-center gap-3">
+        <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
+          <Utensils class="h-5 w-5" />
+        </span>
+        <div class="min-w-0">
+          <div class="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">MenuMaker</div>
+          <h1 class="truncate text-lg font-semibold text-slate-950 sm:text-xl">{menu.name || 'Untitled menu'}</h1>
+        </div>
+      </div>
+
+      <div class="flex min-w-0 flex-col gap-2 lg:items-end">
+        <div class="editor-command-group grid w-full max-w-full grid-cols-6 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <button
+            class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
+            type="button"
+            aria-label="Open templates"
+            title="Templates"
+            onclick={openTemplateModal}
+          >
+            <LayoutTemplate class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">Templates</span>
+          </button>
+          <button
+            class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
+            type="button"
+            aria-label="Export draft"
+            title="Export"
+            onclick={exportDraft}
+          >
+            <Download class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">Export</span>
+          </button>
+          <button
+            class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
+            type="button"
+            aria-label="Import CSV"
+            title="CSV"
+            onclick={openCsvImportModal}
+          >
+            <FileSpreadsheet class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">CSV</span>
+          </button>
+          <label
+            class="inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white px-2 py-2.5 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus-within:ring-4 focus-within:ring-brand-200 sm:px-4"
+            aria-label="Import draft"
+            title="Import"
+          >
+            <Upload class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">Import</span>
+            <input class="sr-only" type="file" accept=".json,application/json" onchange={handleDraftImport} />
+          </label>
+          <button
+            class="print-command inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
+            type="button"
+            aria-label="Print menu"
+            title="Print"
+            onclick={printMenu}
+          >
+            <Printer class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">Print</span>
+          </button>
+          <button
+            class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
+            type="button"
+            aria-label="Reset menu"
+            title="Reset"
+            onclick={resetMenu}
+          >
+            <RotateCcw class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">Reset</span>
+          </button>
+        </div>
+
+        {#if draftFileError || draftFileStatus}
+          <p
+            class={`max-w-xl text-left text-sm lg:text-right ${draftFileError ? 'text-red-700' : 'text-slate-600'}`}
+            aria-live="polite"
+          >
+            {draftFileError || draftFileStatus}
+          </p>
+        {/if}
+      </div>
+    </div>
+  </header>
+
   <div
-    class="mobile-view-switch mx-auto mb-4 grid max-w-7xl grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm xl:hidden"
+    class="mobile-view-switch mx-auto mb-4 grid max-w-[92rem] grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm xl:hidden"
     role="group"
     aria-label="Choose editor or preview view"
   >
@@ -1982,64 +2087,60 @@
     </button>
   </div>
 
-  <div class="app-layout mx-auto grid max-w-7xl gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
+  <div class="app-layout mx-auto grid max-w-[92rem] gap-4 xl:grid-cols-[4.75rem_minmax(340px,430px)_minmax(0,1fr)] xl:gap-6">
+    <nav
+      class={`editor-tool-rail grid grid-cols-5 gap-2 rounded-lg border border-slate-200 bg-white/90 p-2 shadow-sm xl:sticky xl:top-24 xl:flex xl:flex-col xl:self-start ${
+        mobileView === 'preview' ? 'hidden xl:flex' : ''
+      }`}
+      aria-label="Editor tools"
+    >
+      {#each editorPanels as panel (panel.id)}
+        <button
+          class={`group flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs font-semibold transition focus:outline-none focus:ring-4 focus:ring-brand-200 xl:text-sm ${
+            activeEditorPanel === panel.id
+              ? 'border-brand-600 bg-brand-50 text-brand-800 shadow-sm'
+              : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+          }`}
+          data-editor-panel={panel.id}
+          type="button"
+          aria-label={`${panel.label}: ${panel.description}`}
+          aria-pressed={activeEditorPanel === panel.id}
+          title={panel.description}
+          onclick={() => (activeEditorPanel = panel.id)}
+        >
+          {#if panel.id === 'menu'}
+            <Pencil class="h-5 w-5" />
+          {:else if panel.id === 'sections'}
+            <Utensils class="h-5 w-5" />
+          {:else if panel.id === 'design'}
+            <Palette class="h-5 w-5" />
+          {:else if panel.id === 'print'}
+            <FileText class="h-5 w-5" />
+          {:else}
+            <MapPin class="h-5 w-5" />
+          {/if}
+          <span>{panel.label}</span>
+        </button>
+      {/each}
+    </nav>
+
     <section
       id="menu-editor"
-      class={`menu-editor space-y-5 ${mobileView === 'preview' ? 'hidden xl:block' : ''}`}
+      class={`menu-editor editor-inspector space-y-5 ${mobileView === 'preview' ? 'hidden xl:block' : ''}`}
       aria-label="Menu editor"
     >
-      <div class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white/90 p-5 shadow-sm sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div class="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.14em] text-brand-700">
-            <Utensils class="h-4 w-4" />
-            MenuMaker
-          </div>
-          <h1 class="text-3xl font-semibold text-slate-950 sm:text-4xl">Menu builder</h1>
-          <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Create sections, add items, set prices, and watch the printable preview update immediately.
-          </p>
-        </div>
-        <div class="flex flex-col gap-2 sm:items-end">
-          <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
-            <Button class="w-full justify-center sm:w-auto" color="light" onclick={openTemplateModal}>
-              <LayoutTemplate class="mr-2 h-4 w-4" />
-              Templates
-            </Button>
-            <Button class="w-full justify-center sm:w-auto" color="light" onclick={exportDraft}>
-              <Download class="mr-2 h-4 w-4" />
-              Export draft
-            </Button>
-            <Button class="w-full justify-center sm:w-auto" color="light" onclick={openCsvImportModal}>
-              <FileSpreadsheet class="mr-2 h-4 w-4" />
-              Import CSV
-            </Button>
-            <label
-              class="inline-flex min-h-10 w-full cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus-within:ring-4 focus-within:ring-brand-200 sm:w-auto"
-            >
-              <Upload class="mr-2 h-4 w-4" />
-              Import draft
-              <input class="sr-only" type="file" accept=".json,application/json" onchange={handleDraftImport} />
-            </label>
-            <Button class="w-full justify-center sm:w-auto" color="light" onclick={resetMenu}>
-              <RotateCcw class="mr-2 h-4 w-4" />
-              Reset
-            </Button>
-          </div>
-
-          {#if draftFileError || draftFileStatus}
-            <p
-              class={`max-w-sm text-left text-sm sm:text-right ${
-                draftFileError ? 'text-red-700' : 'text-slate-600'
-              }`}
-              aria-live="polite"
-            >
-              {draftFileError || draftFileStatus}
-            </p>
-          {/if}
-        </div>
-      </div>
-
+      {#if activeEditorPanel === 'menu'}
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-start gap-3">
+          <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <Pencil class="h-5 w-5" />
+          </span>
+          <div>
+            <h2 class="text-xl font-semibold text-slate-950">Menu details</h2>
+            <p class="mt-1 text-sm text-slate-600">Set the name, subtitle, top text, and logo for this menu.</p>
+          </div>
+        </div>
+
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block sm:col-span-2">
             <span class="text-sm font-medium text-slate-700">Small top text</span>
@@ -2174,6 +2275,7 @@
         </div>
       </div>
 
+      {:else if activeEditorPanel === 'design'}
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex items-start gap-3">
           <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
@@ -2212,6 +2314,7 @@
         </div>
       </div>
 
+      {:else if activeEditorPanel === 'print'}
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex items-start gap-3">
           <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
@@ -2334,6 +2437,7 @@
         {/if}
       </div>
 
+      {:else if activeEditorPanel === 'details'}
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex items-start gap-3">
           <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
@@ -2456,6 +2560,7 @@
         </div>
       </div>
 
+      {:else if activeEditorPanel === 'sections'}
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex items-start justify-between gap-3">
           <div>
@@ -2670,11 +2775,12 @@
           </div>
         </div>
       {/if}
+      {/if}
     </section>
 
     <aside
       id="menu-preview"
-      class={`menu-preview-column ${mobileView === 'editor' ? 'hidden xl:block' : ''} xl:sticky xl:top-5 xl:self-start`}
+      class={`menu-preview-column ${mobileView === 'editor' ? 'hidden xl:block' : ''} xl:sticky xl:top-24 xl:self-start`}
       aria-label="Menu preview"
     >
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
