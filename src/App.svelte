@@ -1966,9 +1966,9 @@
 
 <a class="skip-link" href="#menu-editor">Skip to menu editor</a>
 
-<main class="app-shell min-h-screen px-4 py-4 sm:px-6 lg:px-8">
+<main class="app-shell flex h-screen min-h-0 flex-col overflow-hidden">
   <header
-    class="editor-topbar mx-auto mb-4 max-w-[92rem] rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur"
+    class="editor-topbar shrink-0 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur sm:px-5"
   >
     <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
       <div class="flex min-w-0 items-center gap-3">
@@ -2057,7 +2057,7 @@
   </header>
 
   <div
-    class="mobile-view-switch mx-auto mb-4 grid max-w-[92rem] grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm xl:hidden"
+    class="mobile-view-switch mx-3 mt-3 grid shrink-0 grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm xl:hidden"
     role="group"
     aria-label="Choose editor or preview view"
   >
@@ -2087,9 +2087,13 @@
     </button>
   </div>
 
-  <div class="app-layout mx-auto grid max-w-[92rem] gap-4 xl:grid-cols-[4.75rem_minmax(340px,430px)_minmax(0,1fr)] xl:gap-6">
+  <div
+    class={`app-layout grid min-h-0 flex-1 gap-3 overflow-hidden p-3 xl:grid-cols-[4.75rem_minmax(360px,440px)_minmax(0,1fr)] xl:grid-rows-1 xl:gap-0 xl:p-0 ${
+      mobileView === 'preview' ? 'grid-rows-1' : 'grid-rows-[auto_minmax(0,1fr)]'
+    }`}
+  >
     <nav
-      class={`editor-tool-rail grid grid-cols-5 gap-2 rounded-lg border border-slate-200 bg-white/90 p-2 shadow-sm xl:sticky xl:top-24 xl:flex xl:flex-col xl:self-start ${
+      class={`editor-tool-rail grid shrink-0 grid-cols-5 gap-2 rounded-lg border border-slate-200 bg-white/90 p-2 shadow-sm xl:flex xl:h-full xl:flex-col xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:shadow-none ${
         mobileView === 'preview' ? 'hidden xl:flex' : ''
       }`}
       aria-label="Editor tools"
@@ -2126,7 +2130,9 @@
 
     <section
       id="menu-editor"
-      class={`menu-editor editor-inspector space-y-5 ${mobileView === 'preview' ? 'hidden xl:block' : ''}`}
+      class={`menu-editor editor-inspector h-full min-h-0 space-y-5 overflow-y-auto xl:border-r xl:border-slate-200 xl:bg-slate-50 xl:p-5 ${
+        mobileView === 'preview' ? 'hidden xl:block' : ''
+      }`}
       aria-label="Menu editor"
     >
       {#if activeEditorPanel === 'menu'}
@@ -2780,11 +2786,11 @@
 
     <aside
       id="menu-preview"
-      class={`menu-preview-column ${mobileView === 'editor' ? 'hidden xl:block' : ''} xl:sticky xl:top-24 xl:self-start`}
+      class={`menu-preview-column h-full min-h-0 overflow-hidden ${mobileView === 'editor' ? 'hidden xl:block' : ''}`}
       aria-label="Menu preview"
     >
-      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div class="mb-4 flex items-center justify-between gap-3">
+      <div class="editor-preview-pane flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm xl:rounded-none xl:border-0 xl:shadow-none">
+        <div class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
           <div>
             <div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.14em] text-brand-700">
               <Eye class="h-4 w-4" />
@@ -2798,11 +2804,12 @@
           </Button>
         </div>
 
-        <div
-          bind:this={previewElement}
-          class={`menu-print-preview ${activeStylePreset.previewClass} rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-inner sm:p-8`}
-          style={previewStyleVariables}
-        >
+        <div class="menu-preview-canvas min-h-0 flex-1 overflow-auto bg-slate-200/70 p-3 sm:p-5">
+          <div
+            bind:this={previewElement}
+            class={`menu-print-preview ${activeStylePreset.previewClass} min-h-full w-full rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-sm sm:p-8`}
+            style={previewStyleVariables}
+          >
           <div class="menu-print-header relative border-b border-slate-300 pb-6 text-center">
             {#if hasLogo && menu.logoPlacement === 'left-eyebrow'}
               <img
@@ -2972,6 +2979,7 @@
             </div>
           {/if}
         </div>
+      </div>
       </div>
     </aside>
   </div>

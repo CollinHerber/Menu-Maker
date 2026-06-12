@@ -20,17 +20,21 @@
 
 html {
   color-scheme: light;
+  height: 100%;
 }
 
 body {
   min-width: 320px;
-  min-height: 100vh;
+  height: 100%;
   margin: 0;
-  background:
-    radial-gradient(circle at top left, rgb(34 168 137 / 0.13), transparent 28rem),
-    linear-gradient(135deg, #f8fafc 0%, #eef2f7 52%, #fdfaf6 100%);
+  overflow: hidden;
+  background: #e2e8f0;
   color: #172033;
   font-family: var(--font-sans);
+}
+
+#app {
+  height: 100%;
 }
 
 button,
@@ -68,12 +72,17 @@ textarea {
   min-width: 0;
 }
 
-@media (min-width: 1280px) {
-  .editor-topbar {
-    position: sticky;
-    top: 0.75rem;
-    z-index: 30;
-  }
+.app-shell {
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.editor-topbar {
+  z-index: 30;
+}
+
+.editor-inspector,
+.menu-preview-canvas {
+  scrollbar-gutter: stable;
 }
 
 .menu-editor,
