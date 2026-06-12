@@ -96,6 +96,12 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.menu-print-pages {
+  display: grid;
+  gap: 1.5rem;
+  min-width: max-content;
+}
+
 .menu-print-section {
   grid-column: span 1 / span 1;
 }
@@ -114,12 +120,13 @@ textarea {
   box-sizing: border-box;
   display: block;
   font-family: var(--menu-body-font, var(--font-sans));
+  height: var(--print-preview-paper-height, 792px);
   margin-inline: auto;
   max-width: none;
-  min-height: var(--print-preview-paper-height, 1056px);
+  overflow: hidden;
   padding: var(--print-preview-padding, 1.5rem) !important;
   text-align: initial;
-  width: var(--print-preview-paper-width, 816px);
+  width: var(--print-preview-paper-width, 612px);
   aspect-ratio: var(--print-preview-aspect, auto);
 }
 
@@ -236,6 +243,8 @@ textarea {
   .app-layout,
   .menu-preview-column,
   .menu-preview-column > div,
+  .menu-preview-canvas,
+  .menu-print-pages,
   .menu-print-preview {
     display: block !important;
     width: 100% !important;
@@ -253,8 +262,15 @@ textarea {
     display: none !important;
   }
 
-  .menu-preview-column > div > :not(.menu-print-preview) {
+  .editor-preview-pane > :not(.menu-preview-canvas) {
     display: none !important;
+  }
+
+  .menu-preview-canvas,
+  .menu-print-pages {
+    background: white !important;
+    gap: 0 !important;
+    overflow: visible !important;
   }
 
   .menu-print-preview {
@@ -262,8 +278,16 @@ textarea {
     box-shadow: none !important;
     background: white !important;
     color: #111827 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    page-break-after: always;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+
+  .menu-print-preview:last-child {
+    page-break-after: auto;
   }
 
   .menu-print-grid {

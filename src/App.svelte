@@ -134,6 +134,22 @@
     itemCount: number;
   };
 
+  type PreviewSectionChunk = {
+    id: string;
+    sectionId: string;
+    name: string;
+    columnSpan: SectionColumnSpan;
+    items: MenuItem[];
+    isContinuation: boolean;
+  };
+
+  type PreviewPage = {
+    id: string;
+    sections: PreviewSectionChunk[];
+    showFooter: boolean;
+    showHeader: boolean;
+  };
+
   const storageKey = 'menumaker:draft:v1';
   const draftFileSchemaVersion = 1;
 
@@ -159,6 +175,11 @@
   const printDensities: Record<PrintDensity, { label: string; itemSpacing: string; sectionSpacing: string }> = {
     comfortable: { label: 'Comfortable', itemSpacing: '1rem', sectionSpacing: '2rem' },
     compact: { label: 'Compact', itemSpacing: '0.7rem', sectionSpacing: '1.35rem' },
+  };
+  const previewPaddingPixels: Record<PrintMargin, number> = {
+    compact: 16,
+    standard: 24,
+    wide: 32,
   };
   const printPageSizeOptions: PrintPageSize[] = ['letter', 'a4'];
   const printOrientationOptions: PrintOrientation[] = ['portrait', 'landscape'];
@@ -1466,6 +1487,250 @@
     selectedSectionId = sectionId;
     activeEditorPanel = 'sections';
   };
+
+  const estimateWrappedLineCount = (value: string, charactersPerLine: number) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return 0;
+
+    return Math.max(1, Math.ceil(trimmedValue.length / charactersPerLine));
+  };
+
+  const estimatePreviewHeaderHeight = () => {
+    let height = 108;
+
+    if (hasTopText) height += 26;
+    if (menu.subtitle.trim()) height += 30;
+    if (hasRestaurantDetails) height += 62;
+    if (hasLogo && (menu.logoPlacement === 'above-eyebrow' || menu.logoPlacement === 'below-eyebrow')) {
+      height += 86;
+    }
+
+    return height;
+  };
+
+  const estimatePreviewItemHeight = (item: MenuItem, sectionSpan: SectionColumnSpan) => {
+    const isNarrowColumn = menu.printSettings.columns === 2 && sectionSpan === 1;
+    const nameLines = estimateWrappedLineCount(item.name || 'Untitled item', isNarrowColumn ? 22 : 46);
+    const descriptionLines = estimateWrappedLineCount(item.description, isNarrowColumn ? 34 : 78);
+
+    return nameLines * 28 + (descriptionLines > 0 ? descriptionLines * 24 + 8 : 0);
+  };
+
+  const estimatePreviewSectionHeight = (section: PreviewSectionChunk) => {
+    const sectionSpan = Math.min(section.columnSpan, menu.printSettings.columns) as SectionColumnSpan;
+    const itemGap = menu.printSettings.density === 'compact' ? 11 : 16;
+    const headingHeight = 50;
+
+    if (section.items.length === 0) return headingHeight + 30;
+
+    return (
+      headingHeight +
+      section.items.reduce(
+        (height, item, itemIndex) =>
+          height + estimatePreviewItemHeight(item, sectionSpan) + (itemIndex === 0 ? 0 : itemGap),
+        0,
+      )
+    );
+  };
+
+  const estimatePreviewSectionsHeight = (sections: PreviewSectionChunk[]) => {
+    if (sections.length === 0) return hasMenuContent ? 0 : 94;
+
+    const rowGap = menu.printSettings.density === 'compact' ? 22 : 32;
+    let totalHeight = 24;
+    let pendingColumnHeights: number[] = [];
+
+    const addRow = (rowHeight: number) => {
+      totalHeight += (totalHeight === 24 ? 0 : rowGap) + rowHeight;
+    };
+
+    const flushColumns = () => {
+      if (pendingColumnHeights.length === 0) return;
+      addRow(Math.max(...pendingColumnHeights));
+      pendingColumnHeights = [];
+    };
+
+    sections.forEach((section) => {
+      const sectionSpan = Math.min(section.columnSpan, menu.printSettings.columns);
+      const sectionHeight = estimatePreviewSectionHeight(section);
+
+      if (menu.printSettings.columns === 1 || sectionSpan === menu.printSettings.columns) {
+        flushColumns();
+        addRow(sectionHeight);
+        return;
+      }
+
+      pendingColumnHeights.push(sectionHeight);
+      if (pendingColumnHeights.length === menu.printSettings.columns) {
+        flushColumns();
+      }
+    });
+
+    flushColumns();
+    return totalHeight;
+  };
+
+  const estimatePreviewFooterHeight = () => {
+    if (!hasMenuFooter) return 0;
+
+    let height = 78;
+    if (menu.footerNote.trim()) height += 34;
+    if (menu.disclaimer.trim()) height += 40;
+    if (hasQrCodeUrl) height = Math.max(height, 168);
+
+    return height;
+  };
+
+  const createPreviewSectionChunk = (
+    section: MenuSection,
+    items: MenuItem[],
+    chunkIndex = 0,
+  ): PreviewSectionChunk => ({
+    id: `${section.id}-${chunkIndex}-${items.map((item) => item.id).join('-') || 'empty'}`,
+    sectionId: section.id,
+    name: section.name,
+    columnSpan: section.columnSpan,
+    items,
+    isContinuation: chunkIndex > 0,
+  });
+
+  const estimatePreviewPageHeight = (page: PreviewPage, extraSection?: PreviewSectionChunk, showFooter = page.showFooter) => {
+    const sections = extraSection ? [...page.sections, extraSection] : page.sections;
+    let height = page.showHeader ? estimatePreviewHeaderHeight() : 0;
+    height += estimatePreviewSectionsHeight(sections);
+
+    if (showFooter) {
+      height += (height > 0 ? 32 : 0) + estimatePreviewFooterHeight();
+    }
+
+    return height;
+  };
+
+  const paginatePreview = () => {
+    const pageContentHeight =
+      Math.round(printPageHeight * previewPixelsPerInch) - previewPaddingPixels[menu.printSettings.margin] * 2;
+    const pages: PreviewPage[] = [{ id: 'page-1', sections: [], showFooter: false, showHeader: true }];
+
+    const createPage = () => {
+      const page: PreviewPage = {
+        id: `page-${pages.length + 1}`,
+        sections: [],
+        showFooter: false,
+        showHeader: false,
+      };
+      pages.push(page);
+      return page;
+    };
+
+    const canFit = (page: PreviewPage, chunk?: PreviewSectionChunk, showFooter = page.showFooter) =>
+      estimatePreviewPageHeight(page, chunk, showFooter) <= pageContentHeight;
+
+    const addChunkToPage = (chunk: PreviewSectionChunk) => {
+      let page = pages[pages.length - 1];
+
+      if (canFit(page, chunk)) {
+        page.sections.push(chunk);
+        return;
+      }
+
+      if (!page.showHeader || page.sections.length > 0) {
+        page = createPage();
+      }
+
+      if (canFit(page, chunk) || chunk.items.length <= 1) {
+        page.sections.push(chunk);
+        return;
+      }
+
+      let itemIndex = 0;
+      let chunkIndex = chunk.isContinuation ? 1 : 0;
+
+      while (itemIndex < chunk.items.length) {
+        page = pages[pages.length - 1];
+
+        if (!canFit(page) && page.sections.length > 0) {
+          page = createPage();
+        }
+
+        const chunkItems: MenuItem[] = [];
+
+        while (itemIndex < chunk.items.length) {
+          const nextItems = [...chunkItems, chunk.items[itemIndex]];
+          const candidate = createPreviewSectionChunk(
+            {
+              id: chunk.sectionId,
+              name: chunk.name,
+              columnSpan: chunk.columnSpan,
+              items: chunk.items,
+            },
+            nextItems,
+            chunkIndex,
+          );
+
+          if (canFit(page, candidate) || chunkItems.length === 0) {
+            chunkItems.push(chunk.items[itemIndex]);
+            itemIndex += 1;
+            continue;
+          }
+
+          break;
+        }
+
+        page.sections.push(
+          createPreviewSectionChunk(
+            {
+              id: chunk.sectionId,
+              name: chunk.name,
+              columnSpan: chunk.columnSpan,
+              items: chunk.items,
+            },
+            chunkItems,
+            chunkIndex,
+          ),
+        );
+        chunkIndex += 1;
+
+        if (itemIndex < chunk.items.length) {
+          createPage();
+        }
+      }
+    };
+
+    menu.sections.forEach((section) => {
+      const chunk = createPreviewSectionChunk(section, section.items);
+      const currentPage = pages[pages.length - 1];
+
+      if (canFit(currentPage, chunk)) {
+        currentPage.sections.push(chunk);
+        return;
+      }
+
+      const emptyPage: PreviewPage = { id: 'test-page', sections: [], showFooter: false, showHeader: false };
+      const shouldMoveWholeSection = currentPage.sections.length > 0 && canFit(emptyPage, chunk);
+
+      if (shouldMoveWholeSection) {
+        createPage().sections.push(chunk);
+        return;
+      }
+
+      addChunkToPage(chunk);
+    });
+
+    if (hasMenuFooter) {
+      let page = pages[pages.length - 1];
+
+      if (canFit(page, undefined, true)) {
+        page.showFooter = true;
+      } else {
+        page = createPage();
+        page.showFooter = true;
+      }
+    }
+
+    return pages;
+  };
+
+  let previewPages = $derived(paginatePreview());
 
   const openTemplateModal = () => {
     pendingTemplateId = '';
@@ -2808,181 +3073,193 @@
         </div>
 
         <div class="menu-preview-canvas min-h-0 flex-1 overflow-auto bg-slate-200/70 p-3 sm:p-5">
-          <div
-            bind:this={previewElement}
-            class={`menu-print-preview ${activeStylePreset.previewClass} rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-sm sm:p-8`}
-            style={previewStyleVariables}
-          >
-          <div class="menu-print-header relative border-b border-slate-300 pb-6 text-center">
-            {#if hasLogo && menu.logoPlacement === 'left-eyebrow'}
-              <img
-                class="mx-auto mb-4 max-h-24 max-w-48 object-contain sm:absolute sm:left-0 sm:top-0 sm:mx-0 sm:mb-0 sm:max-h-20 sm:max-w-32"
-                src={menu.logoDataUrl}
-                alt={menu.logoName || 'Menu logo'}
-              />
-            {/if}
-
-            {#if hasLogo && menu.logoPlacement === 'right-eyebrow'}
-              <img
-                class="mx-auto mb-4 max-h-24 max-w-48 object-contain sm:absolute sm:right-0 sm:top-0 sm:mx-0 sm:mb-0 sm:max-h-20 sm:max-w-32"
-                src={menu.logoDataUrl}
-                alt={menu.logoName || 'Menu logo'}
-              />
-            {/if}
-
-            {#if hasLogo && menu.logoPlacement === 'above-eyebrow'}
-              <img
-                class="mx-auto mb-4 max-h-24 max-w-48 object-contain"
-                src={menu.logoDataUrl}
-                alt={menu.logoName || 'Menu logo'}
-              />
-            {/if}
-
-            {#if hasTopText}
-              <p class="text-sm font-medium uppercase tracking-[0.2em] text-brand-700">{menu.eyebrow}</p>
-            {/if}
-
-            {#if hasLogo && menu.logoPlacement === 'below-eyebrow'}
-              <img
-                class="mx-auto mt-4 max-h-24 max-w-48 object-contain"
-                src={menu.logoDataUrl}
-                alt={menu.logoName || 'Menu logo'}
-              />
-            {/if}
-
-            <h3
-              class={hasHeaderTopContent
-                ? 'mt-3 text-3xl font-serif text-slate-950'
-                : 'text-3xl font-serif text-slate-950'}
-            >
-              {menu.name || 'Untitled Menu'}
-            </h3>
-            {#if menu.subtitle}
-              <p class="mt-2 text-sm text-slate-600">{menu.subtitle}</p>
-            {/if}
-
-            {#if hasRestaurantDetails}
-              <div class="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs leading-5 text-slate-600">
-                {#if menu.address.trim()}
-                  <span class="inline-flex items-center gap-1.5">
-                    <MapPin class="h-3.5 w-3.5 shrink-0 text-brand-700" />
-                    {menu.address}
-                  </span>
-                {/if}
-
-                {#if menu.phone.trim()}
-                  <span class="inline-flex items-center gap-1.5">
-                    <Phone class="h-3.5 w-3.5 shrink-0 text-brand-700" />
-                    {menu.phone}
-                  </span>
-                {/if}
-
-                {#if menu.website.trim()}
-                  <a class="inline-flex items-center gap-1.5 text-slate-600 no-underline" href={websiteHref}>
-                    <Globe class="h-3.5 w-3.5 shrink-0 text-brand-700" />
-                    {menu.website}
-                  </a>
-                {/if}
-
-                {#if menu.hours.trim()}
-                  <span class="inline-flex items-center gap-1.5">
-                    <Clock class="h-3.5 w-3.5 shrink-0 text-brand-700" />
-                    {menu.hours}
-                  </span>
-                {/if}
-
-                {#if menu.socialHandle.trim()}
-                  <span class="inline-flex items-center gap-1.5">
-                    <Globe class="h-3.5 w-3.5 shrink-0 text-brand-700" />
-                    {menu.socialHandle}
-                  </span>
-                {/if}
-              </div>
-            {/if}
-          </div>
-
-          <div
-            class="menu-print-grid mt-6 grid gap-x-8 gap-y-8"
-            style={`grid-template-columns: repeat(${menu.printSettings.columns}, minmax(0, 1fr));`}
-          >
-            {#each menu.sections as section (section.id)}
-              <section
-                class="menu-print-section"
-                style={`--section-column-span: ${Math.min(section.columnSpan, menu.printSettings.columns)};`}
+          <div bind:this={previewElement} class="menu-print-pages" style={previewStyleVariables}>
+            {#each previewPages as page, pageIndex (page.id)}
+              <div
+                class={`menu-print-preview ${activeStylePreset.previewClass} rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-sm sm:p-8`}
+                data-preview-page={pageIndex + 1}
               >
-                <h4
-                  class="menu-print-section-heading mb-4 flex items-center gap-3 text-lg font-semibold uppercase tracking-[0.12em] text-slate-900"
-                >
-                  <span>{section.name || 'Untitled section'}</span>
-                  <span class="menu-print-section-rule flex-1"></span>
-                </h4>
+                {#if page.showHeader}
+                  <div class="menu-print-header relative border-b border-slate-300 pb-6 text-center">
+                    {#if hasLogo && menu.logoPlacement === 'left-eyebrow'}
+                      <img
+                        class="mx-auto mb-4 max-h-24 max-w-48 object-contain sm:absolute sm:left-0 sm:top-0 sm:mx-0 sm:mb-0 sm:max-h-20 sm:max-w-32"
+                        src={menu.logoDataUrl}
+                        alt={menu.logoName || 'Menu logo'}
+                      />
+                    {/if}
 
-                <div class="space-y-4">
-                  {#each section.items as item (item.id)}
-                    <article class="menu-print-item">
-                      <div class="flex items-baseline justify-between gap-4">
-                        <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
-                        <p class="shrink-0 font-semibold text-slate-900">
-                          {item.price ? formatPrice(item.price) : ''}
-                        </p>
+                    {#if hasLogo && menu.logoPlacement === 'right-eyebrow'}
+                      <img
+                        class="mx-auto mb-4 max-h-24 max-w-48 object-contain sm:absolute sm:right-0 sm:top-0 sm:mx-0 sm:mb-0 sm:max-h-20 sm:max-w-32"
+                        src={menu.logoDataUrl}
+                        alt={menu.logoName || 'Menu logo'}
+                      />
+                    {/if}
+
+                    {#if hasLogo && menu.logoPlacement === 'above-eyebrow'}
+                      <img
+                        class="mx-auto mb-4 max-h-24 max-w-48 object-contain"
+                        src={menu.logoDataUrl}
+                        alt={menu.logoName || 'Menu logo'}
+                      />
+                    {/if}
+
+                    {#if hasTopText}
+                      <p class="text-sm font-medium uppercase tracking-[0.2em] text-brand-700">{menu.eyebrow}</p>
+                    {/if}
+
+                    {#if hasLogo && menu.logoPlacement === 'below-eyebrow'}
+                      <img
+                        class="mx-auto mt-4 max-h-24 max-w-48 object-contain"
+                        src={menu.logoDataUrl}
+                        alt={menu.logoName || 'Menu logo'}
+                      />
+                    {/if}
+
+                    <h3
+                      class={hasHeaderTopContent
+                        ? 'mt-3 text-3xl font-serif text-slate-950'
+                        : 'text-3xl font-serif text-slate-950'}
+                    >
+                      {menu.name || 'Untitled Menu'}
+                    </h3>
+                    {#if menu.subtitle}
+                      <p class="mt-2 text-sm text-slate-600">{menu.subtitle}</p>
+                    {/if}
+
+                    {#if hasRestaurantDetails}
+                      <div class="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs leading-5 text-slate-600">
+                        {#if menu.address.trim()}
+                          <span class="inline-flex items-center gap-1.5">
+                            <MapPin class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                            {menu.address}
+                          </span>
+                        {/if}
+
+                        {#if menu.phone.trim()}
+                          <span class="inline-flex items-center gap-1.5">
+                            <Phone class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                            {menu.phone}
+                          </span>
+                        {/if}
+
+                        {#if menu.website.trim()}
+                          <a class="inline-flex items-center gap-1.5 text-slate-600 no-underline" href={websiteHref}>
+                            <Globe class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                            {menu.website}
+                          </a>
+                        {/if}
+
+                        {#if menu.hours.trim()}
+                          <span class="inline-flex items-center gap-1.5">
+                            <Clock class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                            {menu.hours}
+                          </span>
+                        {/if}
+
+                        {#if menu.socialHandle.trim()}
+                          <span class="inline-flex items-center gap-1.5">
+                            <Globe class="h-3.5 w-3.5 shrink-0 text-brand-700" />
+                            {menu.socialHandle}
+                          </span>
+                        {/if}
                       </div>
-                      {#if item.description}
-                        <p class="mt-1 max-w-prose text-sm leading-6 text-slate-600">{item.description}</p>
-                      {/if}
-                    </article>
+                    {/if}
+                  </div>
+                {/if}
+
+                <div
+                  class="menu-print-grid mt-6 grid gap-x-8 gap-y-8"
+                  style={`grid-template-columns: repeat(${menu.printSettings.columns}, minmax(0, 1fr));`}
+                >
+                  {#each page.sections as section (section.id)}
+                    <section
+                      class="menu-print-section"
+                      style={`--section-column-span: ${Math.min(section.columnSpan, menu.printSettings.columns)};`}
+                    >
+                      <h4
+                        class="menu-print-section-heading mb-4 flex items-center gap-3 text-lg font-semibold uppercase tracking-[0.12em] text-slate-900"
+                      >
+                        <span>
+                          {section.name || 'Untitled section'}
+                          {#if section.isContinuation}
+                            <span class="ml-2 align-middle text-xs font-medium normal-case tracking-normal text-slate-500">
+                              continued
+                            </span>
+                          {/if}
+                        </span>
+                        <span class="menu-print-section-rule flex-1"></span>
+                      </h4>
+
+                      <div class="space-y-4">
+                        {#each section.items as item (item.id)}
+                          <article class="menu-print-item">
+                            <div class="flex items-baseline justify-between gap-4">
+                              <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
+                              <p class="shrink-0 font-semibold text-slate-900">
+                                {item.price ? formatPrice(item.price) : ''}
+                              </p>
+                            </div>
+                            {#if item.description}
+                              <p class="mt-1 max-w-prose text-sm leading-6 text-slate-600">{item.description}</p>
+                            {/if}
+                          </article>
+                        {/each}
+
+                        {#if section.items.length === 0}
+                          <p class="menu-print-empty-section text-sm italic text-slate-500">No items yet.</p>
+                        {/if}
+                      </div>
+                    </section>
                   {/each}
 
-                  {#if section.items.length === 0}
-                    <p class="menu-print-empty-section text-sm italic text-slate-500">No items yet.</p>
+                  {#if !hasMenuContent && pageIndex === 0}
+                    <p
+                      class="menu-print-empty-state rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-600"
+                    >
+                      Add a menu item to see it here.
+                    </p>
                   {/if}
                 </div>
-              </section>
-            {/each}
 
-            {#if !hasMenuContent}
-              <p
-                class="menu-print-empty-state rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-600"
-              >
-                Add a menu item to see it here.
-              </p>
-            {/if}
-          </div>
+                {#if page.showFooter}
+                  <div class="menu-print-footer mt-8 border-t border-slate-300 pt-5">
+                    <div class={hasQrCodeUrl ? 'grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start' : 'grid gap-4'}>
+                      {#if hasFooterDetails}
+                        <div class="space-y-3 text-sm leading-6 text-slate-600">
+                          {#if menu.footerNote.trim()}
+                            <p class="flex gap-2">
+                              <StickyNote class="mt-1 h-4 w-4 shrink-0 text-brand-700" />
+                              <span>{menu.footerNote}</span>
+                            </p>
+                          {/if}
 
-          {#if hasMenuFooter}
-            <div class="menu-print-footer mt-8 border-t border-slate-300 pt-5">
-              <div class={hasQrCodeUrl ? 'grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start' : 'grid gap-4'}>
-                {#if hasFooterDetails}
-                  <div class="space-y-3 text-sm leading-6 text-slate-600">
-                    {#if menu.footerNote.trim()}
-                      <p class="flex gap-2">
-                        <StickyNote class="mt-1 h-4 w-4 shrink-0 text-brand-700" />
-                        <span>{menu.footerNote}</span>
-                      </p>
-                    {/if}
+                          {#if menu.disclaimer.trim()}
+                            <p class="text-xs leading-5 text-slate-500">{menu.disclaimer}</p>
+                          {/if}
+                        </div>
+                      {/if}
 
-                    {#if menu.disclaimer.trim()}
-                      <p class="text-xs leading-5 text-slate-500">{menu.disclaimer}</p>
-                    {/if}
-                  </div>
-                {/if}
-
-                {#if hasQrCodeUrl}
-                  <div class="justify-self-center rounded-lg border border-slate-200 bg-white p-3 text-center shadow-sm sm:justify-self-end">
-                    {#if qrCodeDataUrl}
-                      <img class="mx-auto h-28 w-28" src={qrCodeDataUrl} alt={qrCodeCaption} />
-                    {:else}
-                      <div class="flex h-28 w-28 items-center justify-center rounded-md border border-dashed border-slate-300 p-3 text-xs text-slate-500">
-                        {qrCodeError || 'Creating QR code...'}
-                      </div>
-                    {/if}
-                    <p class="mt-2 max-w-32 text-xs font-medium leading-4 text-slate-700">{qrCodeCaption}</p>
+                      {#if hasQrCodeUrl}
+                        <div class="justify-self-center rounded-lg border border-slate-200 bg-white p-3 text-center shadow-sm sm:justify-self-end">
+                          {#if qrCodeDataUrl}
+                            <img class="mx-auto h-28 w-28" src={qrCodeDataUrl} alt={qrCodeCaption} />
+                          {:else}
+                            <div class="flex h-28 w-28 items-center justify-center rounded-md border border-dashed border-slate-300 p-3 text-xs text-slate-500">
+                              {qrCodeError || 'Creating QR code...'}
+                            </div>
+                          {/if}
+                          <p class="mt-2 max-w-32 text-xs font-medium leading-4 text-slate-700">{qrCodeCaption}</p>
+                        </div>
+                      {/if}
+                    </div>
                   </div>
                 {/if}
               </div>
-            </div>
-          {/if}
+            {/each}
+          </div>
         </div>
-      </div>
       </div>
     </aside>
   </div>
