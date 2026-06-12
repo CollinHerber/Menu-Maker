@@ -165,6 +165,7 @@
   const printMarginOptions: PrintMargin[] = ['compact', 'standard', 'wide'];
   const printDensityOptions: PrintDensity[] = ['comfortable', 'compact'];
   const printColumnOptions: SectionColumnSpan[] = [1, 2];
+  const previewPixelsPerInch = 72;
   const editorPanels: Array<{ id: EditorPanelId; label: string; description: string }> = [
     { id: 'menu', label: 'Menu', description: 'Name, subtitle, and logo' },
     { id: 'sections', label: 'Items', description: 'Sections and menu items' },
@@ -1345,6 +1346,8 @@
   let printSetupVariables = $derived(
     [
       `--print-preview-aspect: ${printPageWidth} / ${printPageHeight};`,
+      `--print-preview-paper-width: ${Math.round(printPageWidth * previewPixelsPerInch)}px;`,
+      `--print-preview-paper-height: ${Math.round(printPageHeight * previewPixelsPerInch)}px;`,
       `--print-preview-padding: ${selectedPrintMargin.previewPadding};`,
       `--print-grid-columns: ${menu.printSettings.columns};`,
       `--menu-item-spacing: ${selectedPrintDensity.itemSpacing};`,
@@ -2807,7 +2810,7 @@
         <div class="menu-preview-canvas min-h-0 flex-1 overflow-auto bg-slate-200/70 p-3 sm:p-5">
           <div
             bind:this={previewElement}
-            class={`menu-print-preview ${activeStylePreset.previewClass} min-h-full w-full rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-sm sm:p-8`}
+            class={`menu-print-preview ${activeStylePreset.previewClass} rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-sm sm:p-8`}
             style={previewStyleVariables}
           >
           <div class="menu-print-header relative border-b border-slate-300 pb-6 text-center">

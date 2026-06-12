@@ -111,8 +111,15 @@ textarea {
 .menu-print-preview {
   background: var(--menu-bg, #fffdf8) !important;
   color: var(--menu-text, #172033);
+  box-sizing: border-box;
+  display: block;
   font-family: var(--menu-body-font, var(--font-sans));
+  margin-inline: auto;
+  max-width: none;
+  min-height: var(--print-preview-paper-height, 1056px);
   padding: var(--print-preview-padding, 1.5rem) !important;
+  text-align: initial;
+  width: var(--print-preview-paper-width, 816px);
   aspect-ratio: var(--print-preview-aspect, auto);
 }
 
