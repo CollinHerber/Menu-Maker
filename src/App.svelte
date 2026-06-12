@@ -1284,19 +1284,35 @@
               <p class="text-sm font-medium text-amber-950">Replace the current menu with this template?</p>
               <p class="mt-1 text-sm text-amber-800">Your current draft will be overwritten after confirmation.</p>
               <div class="mt-3 flex flex-wrap justify-end gap-2">
-                <Button color="light" onclick={cancelTemplateApply}>Cancel</Button>
-                <Button data-template-action={`replace-${template.id}`} onclick={() => applyTemplate(template)}>
+                <button
+                  class="inline-flex items-center justify-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-950 shadow-sm transition hover:bg-amber-100 focus:outline-none focus:ring-4 focus:ring-amber-200"
+                  type="button"
+                  onclick={cancelTemplateApply}
+                >
+                  Cancel
+                </button>
+                <button
+                  class="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-200"
+                  data-template-action={`replace-${template.id}`}
+                  type="button"
+                  onclick={() => applyTemplate(template)}
+                >
                   <LayoutTemplate class="mr-2 h-4 w-4" />
                   Replace menu
-                </Button>
+                </button>
               </div>
             </div>
           {:else}
             <div class="mt-4 flex justify-end border-t border-slate-200 pt-4">
-              <Button data-template-action={`use-${template.id}`} onclick={() => requestTemplateApply(template)}>
+              <button
+                class="inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-200"
+                data-template-action={`use-${template.id}`}
+                type="button"
+                onclick={() => requestTemplateApply(template)}
+              >
                 <LayoutTemplate class="mr-2 h-4 w-4" />
                 Use template
-              </Button>
+              </button>
             </div>
           {/if}
         </article>
