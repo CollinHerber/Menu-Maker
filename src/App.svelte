@@ -3,8 +3,6 @@
   import { Button, Modal } from 'flowbite-svelte';
   import {
     ArrowDown,
-    ArrowLeft,
-    ArrowRight,
     ArrowUp,
     Clock,
     Download,
@@ -13,6 +11,7 @@
     FileSpreadsheet,
     FileText,
     Globe,
+    GripVertical,
     Image,
     LayoutTemplate,
     MapPin,
@@ -2356,7 +2355,7 @@
   </div>
 
   <div
-    class={`app-layout grid min-h-0 flex-1 gap-3 overflow-hidden p-3 xl:grid-cols-[4.75rem_minmax(360px,440px)_minmax(0,1fr)] xl:grid-rows-1 xl:gap-0 xl:p-0 ${
+    class={`app-layout grid min-h-0 flex-1 gap-3 overflow-hidden p-3 xl:grid-rows-1 xl:gap-0 xl:p-0 ${
       mobileView === 'preview' ? 'grid-rows-1' : 'grid-rows-[auto_minmax(0,1fr)]'
     }`}
   >
@@ -2839,7 +2838,9 @@
         <div class="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 class="text-xl font-semibold text-slate-950">Sections</h2>
-            <p class="mt-1 text-sm text-slate-600">Choose a section to edit its menu items.</p>
+            <p class="mt-1 text-sm text-slate-600">
+              {menu.sections.length} section{menu.sections.length === 1 ? '' : 's'} in this menu
+            </p>
           </div>
 
           <button
@@ -2853,49 +2854,63 @@
           </button>
         </div>
 
-        <div class="flex gap-3 overflow-x-auto pb-2">
+        <div class="grid gap-2" role="list" aria-label="Menu sections">
           {#each menu.sections as section, sectionIndex (section.id)}
             <div
-              class={`flex min-w-fit items-center gap-1 rounded-lg border p-1 transition ${
+              class={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border p-2 transition ${
                 selectedSection?.id === section.id
-                  ? 'border-brand-600 bg-brand-50'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
+                  ? 'border-brand-600 bg-brand-50 shadow-sm'
+                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
               }`}
+              role="listitem"
             >
-              <button
-                aria-label={`Move ${section.name || 'section'} left`}
-                class="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
-                disabled={sectionIndex === 0}
-                title="Move left"
-                type="button"
-                onclick={() => moveSection(section.id, -1)}
-              >
-                <ArrowLeft class="h-4 w-4" />
-              </button>
+              <div class="flex items-center gap-2 text-slate-400">
+                <GripVertical class="h-5 w-5" aria-hidden="true" />
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-sm font-semibold text-slate-600">
+                  {sectionIndex + 1}
+                </span>
+              </div>
 
               <button
                 aria-pressed={selectedSection?.id === section.id}
-                class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                class={`min-w-0 rounded-md px-3 py-2 text-left transition ${
                   selectedSection?.id === section.id
-                    ? 'text-brand-800'
+                    ? 'bg-white/80 text-brand-900'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
                 }`}
                 type="button"
                 onclick={() => selectSection(section.id)}
               >
-                {section.name || 'Untitled section'}
+                <span class="block truncate text-sm font-semibold">{section.name || 'Untitled section'}</span>
+                <span class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                  <span>{section.items.length} item{section.items.length === 1 ? '' : 's'}</span>
+                  <span>{section.columnSpan} col width</span>
+                </span>
               </button>
 
-              <button
-                aria-label={`Move ${section.name || 'section'} right`}
-                class="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
-                disabled={sectionIndex === menu.sections.length - 1}
-                title="Move right"
-                type="button"
-                onclick={() => moveSection(section.id, 1)}
-              >
-                <ArrowRight class="h-4 w-4" />
-              </button>
+              <div class="flex items-center gap-1">
+                <button
+                  aria-label={`Move ${section.name || 'section'} up`}
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
+                  disabled={sectionIndex === 0}
+                  title="Move up"
+                  type="button"
+                  onclick={() => moveSection(section.id, -1)}
+                >
+                  <ArrowUp class="h-4 w-4" />
+                </button>
+
+                <button
+                  aria-label={`Move ${section.name || 'section'} down`}
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
+                  disabled={sectionIndex === menu.sections.length - 1}
+                  title="Move down"
+                  type="button"
+                  onclick={() => moveSection(section.id, 1)}
+                >
+                  <ArrowDown class="h-4 w-4" />
+                </button>
+              </div>
             </div>
           {/each}
         </div>

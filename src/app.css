@@ -80,6 +80,12 @@ textarea {
   z-index: 30;
 }
 
+@media (min-width: 1280px) {
+  .app-layout {
+    grid-template-columns: 4.75rem clamp(28rem, 32vw, 42rem) minmax(0, 1fr);
+  }
+}
+
 .editor-inspector,
 .menu-preview-canvas {
   scrollbar-gutter: stable;
