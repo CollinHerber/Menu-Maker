@@ -5,6 +5,7 @@
     ArrowDown,
     ArrowUp,
     Clock,
+    Copy,
     Download,
     DollarSign,
     Eye,
@@ -168,6 +169,8 @@
     section: string;
     itemCount: number;
   };
+
+  type QuickAddItemDraft = Omit<MenuItem, 'id'>;
 
   type PreviewSectionChunk = {
     id: string;
@@ -520,6 +523,47 @@
     columnSpan,
     items: [],
   });
+
+  const copyName = (value: string, fallback: string) => `${value.trim() || fallback} copy`;
+
+  const cloneMenuItem = (item: MenuItem, appendCopyLabel = false): MenuItem =>
+    createItem({
+      name: appendCopyLabel ? copyName(item.name, 'Untitled item') : item.name,
+      description: item.description,
+      price: item.price,
+    });
+
+  const cloneMenuSection = (section: MenuSection): MenuSection => ({
+    id: createId(),
+    name: copyName(section.name, 'Untitled section'),
+    columnSpan: section.columnSpan,
+    items: section.items.map((item) => cloneMenuItem(item)),
+  });
+
+  function parseQuickAddItemLine(line: string): QuickAddItemDraft | null {
+    const parts = line
+      .split('|')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+
+    if (parts.length === 0) return null;
+
+    const [name, ...details] = parts;
+
+    if (details.length === 0) {
+      return { name, description: '', price: '' };
+    }
+
+    if (details.length === 1) {
+      return { name, description: details[0], price: '' };
+    }
+
+    return {
+      name,
+      description: details.slice(0, -1).join(' | '),
+      price: details.at(-1) ?? '',
+    };
+  }
 
   const starterMenu = (): MenuDraft => ({
     name: 'Main Street Grill',
@@ -1621,9 +1665,28 @@
   let sectionDragPointerId = $state<number | null>(null);
   let sectionDragMouseActive = $state(false);
   let sectionDragHandleElement: HTMLElement | null = null;
+  let selectedItemIds = $state<string[]>([]);
+  let quickAddItemsText = $state('');
+  let draggedItemId = $state('');
+  let itemDropTargetId = $state('');
+  let itemDropPosition = $state<SectionDropPosition>('after');
+  let itemDragPointerId = $state<number | null>(null);
+  let itemDragMouseActive = $state(false);
+  let itemDragHandleElement: HTMLElement | null = null;
 
   let selectedSection = $derived(
     menu.sections.find((section) => section.id === selectedSectionId) ?? menu.sections[0],
+  );
+  let selectedItemIdsInSelectedSection = $derived(
+    selectedSection
+      ? selectedItemIds.filter((itemId) => selectedSection.items.some((item) => item.id === itemId))
+      : [],
+  );
+  let quickAddItemDrafts = $derived(
+    quickAddItemsText
+      .split(/\r?\n/)
+      .map((line) => parseQuickAddItemLine(line))
+      .filter((item): item is QuickAddItemDraft => item !== null),
   );
 
   let itemCount = $derived(menu.sections.reduce((count, section) => count + section.items.length, 0));
@@ -1914,6 +1977,12 @@
   };
 
   const selectSection = (sectionId: string) => {
+    if (selectedSectionId !== sectionId) {
+      selectedItemIds = [];
+      quickAddItemsText = '';
+      resetItemDrag();
+    }
+
     selectedSectionId = sectionId;
     activeEditorPanel = 'sections';
   };
@@ -2201,6 +2270,8 @@
     const section = createSection(sectionName);
     menu.sections.push(section);
     selectedSectionId = section.id;
+    selectedItemIds = [];
+    quickAddItemsText = '';
     activeEditorPanel = 'sections';
     newSectionName = '';
     sectionModalOpen = false;
@@ -2210,11 +2281,34 @@
     if (menu.sections.length === 1) return;
 
     const sectionIndex = menu.sections.findIndex((section) => section.id === sectionId);
+    const removedSection = menu.sections[sectionIndex];
+    const removedItemIds = new Set(removedSection?.items.map((item) => item.id) ?? []);
     menu.sections = menu.sections.filter((section) => section.id !== sectionId);
+    selectedItemIds = selectedItemIds.filter((itemId) => !removedItemIds.has(itemId));
 
     if (selectedSectionId === sectionId) {
       selectedSectionId = menu.sections[Math.max(0, sectionIndex - 1)]?.id ?? menu.sections[0]?.id ?? '';
+      quickAddItemsText = '';
+      resetItemDrag();
     }
+  };
+
+  const duplicateSection = (sectionId: string) => {
+    const sectionIndex = menu.sections.findIndex((section) => section.id === sectionId);
+    const section = menu.sections[sectionIndex];
+
+    if (!section) return;
+
+    const duplicatedSection = cloneMenuSection(section);
+    menu.sections = [
+      ...menu.sections.slice(0, sectionIndex + 1),
+      duplicatedSection,
+      ...menu.sections.slice(sectionIndex + 1),
+    ];
+    selectedSectionId = duplicatedSection.id;
+    selectedItemIds = [];
+    quickAddItemsText = '';
+    activeEditorPanel = 'sections';
   };
 
   const moveSection = (sectionId: string, direction: -1 | 1) => {
@@ -2374,11 +2468,12 @@
   };
 
   const addItem = (section: MenuSection) => {
-    section.items.push(createItem({ name: `Item ${section.items.length + 1}` }));
+    section.items = [...section.items, createItem({ name: `Item ${section.items.length + 1}` })];
   };
 
   const removeItem = (section: MenuSection, itemId: string) => {
     section.items = section.items.filter((item) => item.id !== itemId);
+    selectedItemIds = selectedItemIds.filter((selectedItemId) => selectedItemId !== itemId);
   };
 
   const moveItem = (section: MenuSection, itemId: string, direction: -1 | 1) => {
@@ -2390,6 +2485,285 @@
     const items = [...section.items];
     [items[itemIndex], items[nextIndex]] = [items[nextIndex], items[itemIndex]];
     section.items = items;
+  };
+
+  const duplicateItem = (section: MenuSection, itemId: string) => {
+    const itemIndex = section.items.findIndex((item) => item.id === itemId);
+    const item = section.items[itemIndex];
+
+    if (!item) return;
+
+    const duplicatedItem = cloneMenuItem(item, true);
+    section.items = [
+      ...section.items.slice(0, itemIndex + 1),
+      duplicatedItem,
+      ...section.items.slice(itemIndex + 1),
+    ];
+    selectedItemIds = [duplicatedItem.id];
+  };
+
+  const getSelectedItemIdsForSection = (section: MenuSection) =>
+    selectedItemIds.filter((itemId) => section.items.some((item) => item.id === itemId));
+
+  const isItemSelected = (itemId: string) => selectedItemIds.includes(itemId);
+
+  const toggleItemSelection = (itemId: string, checked: boolean) => {
+    if (checked) {
+      selectedItemIds = selectedItemIds.includes(itemId) ? selectedItemIds : [...selectedItemIds, itemId];
+      return;
+    }
+
+    selectedItemIds = selectedItemIds.filter((selectedItemId) => selectedItemId !== itemId);
+  };
+
+  const clearSelectedItems = (section?: MenuSection) => {
+    if (!section) {
+      selectedItemIds = [];
+      return;
+    }
+
+    const sectionItemIds = new Set(section.items.map((item) => item.id));
+    selectedItemIds = selectedItemIds.filter((itemId) => !sectionItemIds.has(itemId));
+  };
+
+  const setAllItemsSelected = (section: MenuSection, checked: boolean) => {
+    if (!checked) {
+      clearSelectedItems(section);
+      return;
+    }
+
+    const sectionItemIds = section.items.map((item) => item.id);
+    const existingSelectedIds = selectedItemIds.filter((itemId) => !sectionItemIds.includes(itemId));
+    selectedItemIds = [...existingSelectedIds, ...sectionItemIds];
+  };
+
+  const canMoveSelectedItems = (section: MenuSection, direction: -1 | 1) => {
+    const selectedIds = new Set(getSelectedItemIdsForSection(section));
+
+    if (selectedIds.size === 0) return false;
+
+    if (direction === -1) {
+      return section.items.some(
+        (item, index) => selectedIds.has(item.id) && index > 0 && !selectedIds.has(section.items[index - 1].id),
+      );
+    }
+
+    return section.items.some(
+      (item, index) =>
+        selectedIds.has(item.id) &&
+        index < section.items.length - 1 &&
+        !selectedIds.has(section.items[index + 1].id),
+    );
+  };
+
+  const moveSelectedItems = (section: MenuSection, direction: -1 | 1) => {
+    const selectedIds = new Set(getSelectedItemIdsForSection(section));
+
+    if (selectedIds.size === 0) return;
+
+    const items = [...section.items];
+
+    if (direction === -1) {
+      for (let index = 1; index < items.length; index += 1) {
+        if (selectedIds.has(items[index].id) && !selectedIds.has(items[index - 1].id)) {
+          [items[index - 1], items[index]] = [items[index], items[index - 1]];
+        }
+      }
+    } else {
+      for (let index = items.length - 2; index >= 0; index -= 1) {
+        if (selectedIds.has(items[index].id) && !selectedIds.has(items[index + 1].id)) {
+          [items[index + 1], items[index]] = [items[index], items[index + 1]];
+        }
+      }
+    }
+
+    section.items = items;
+  };
+
+  const duplicateSelectedItems = (section: MenuSection) => {
+    const selectedIds = new Set(getSelectedItemIdsForSection(section));
+
+    if (selectedIds.size === 0) return;
+
+    const duplicatedItemIds: string[] = [];
+    const items = section.items.flatMap((item) => {
+      if (!selectedIds.has(item.id)) return [item];
+
+      const duplicatedItem = cloneMenuItem(item, true);
+      duplicatedItemIds.push(duplicatedItem.id);
+
+      return [item, duplicatedItem];
+    });
+
+    section.items = items;
+    selectedItemIds = duplicatedItemIds;
+  };
+
+  const deleteSelectedItems = (section: MenuSection) => {
+    const selectedIds = new Set(getSelectedItemIdsForSection(section));
+
+    if (selectedIds.size === 0) return;
+
+    section.items = section.items.filter((item) => !selectedIds.has(item.id));
+    selectedItemIds = selectedItemIds.filter((itemId) => !selectedIds.has(itemId));
+  };
+
+  const addQuickItems = (section: MenuSection) => {
+    if (quickAddItemDrafts.length === 0) return;
+
+    section.items = [...section.items, ...quickAddItemDrafts.map((item) => createItem(item))];
+    quickAddItemsText = '';
+  };
+
+  const resetItemDrag = () => {
+    window.removeEventListener('pointermove', handleItemGripPointerMove);
+    window.removeEventListener('pointerup', handleItemGripPointerUp);
+    window.removeEventListener('pointercancel', resetItemDrag);
+    window.removeEventListener('mousemove', handleItemGripMouseMove);
+    window.removeEventListener('mouseup', handleItemGripMouseUp);
+    draggedItemId = '';
+    itemDropTargetId = '';
+    itemDropPosition = 'after';
+    itemDragPointerId = null;
+    itemDragMouseActive = false;
+    itemDragHandleElement = null;
+  };
+
+  const startItemDrag = (itemId: string) => {
+    draggedItemId = itemId;
+    itemDropTargetId = '';
+    selectedItemIds = isItemSelected(itemId) ? selectedItemIds : [];
+  };
+
+  const getItemDropPosition = (clientY: number, target: HTMLElement): SectionDropPosition => {
+    const bounds = target.getBoundingClientRect();
+
+    return clientY > bounds.top + bounds.height / 2 ? 'after' : 'before';
+  };
+
+  const getItemDropTarget = (clientX: number, clientY: number) => {
+    const element = document.elementFromPoint(clientX, clientY);
+    const itemCard = element?.closest<HTMLElement>('[data-item-id]');
+    const itemId = itemCard?.dataset.itemId;
+
+    if (!itemId || !itemCard) return null;
+
+    return {
+      itemId,
+      dropPosition: getItemDropPosition(clientY, itemCard),
+    };
+  };
+
+  const moveItemToPosition = (
+    section: MenuSection,
+    itemId: string,
+    targetItemId: string,
+    dropPosition: SectionDropPosition,
+  ) => {
+    if (itemId === targetItemId) return;
+
+    const sourceIndex = section.items.findIndex((item) => item.id === itemId);
+    const targetIndex = section.items.findIndex((item) => item.id === targetItemId);
+
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const items = [...section.items];
+    const [item] = items.splice(sourceIndex, 1);
+    let insertionIndex = targetIndex + (dropPosition === 'after' ? 1 : 0);
+
+    if (sourceIndex < insertionIndex) {
+      insertionIndex -= 1;
+    }
+
+    items.splice(insertionIndex, 0, item);
+    section.items = items;
+  };
+
+  const updateItemDragTarget = (clientX: number, clientY: number) => {
+    if (!selectedSection) return;
+
+    const dropTarget = getItemDropTarget(clientX, clientY);
+    const targetBelongsToSection = selectedSection.items.some((item) => item.id === dropTarget?.itemId);
+
+    if (!dropTarget || dropTarget.itemId === draggedItemId || !targetBelongsToSection) {
+      itemDropTargetId = '';
+      return;
+    }
+
+    itemDropTargetId = dropTarget.itemId;
+    itemDropPosition = dropTarget.dropPosition;
+  };
+
+  const finishItemDrag = (clientX: number, clientY: number) => {
+    if (!selectedSection) return;
+
+    const sourceItemId = draggedItemId;
+    const dropTarget = getItemDropTarget(clientX, clientY);
+    const targetBelongsToSection = selectedSection.items.some((item) => item.id === dropTarget?.itemId);
+
+    if (sourceItemId && dropTarget && dropTarget.itemId !== sourceItemId && targetBelongsToSection) {
+      moveItemToPosition(selectedSection, sourceItemId, dropTarget.itemId, dropTarget.dropPosition);
+    }
+  };
+
+  const handleItemGripPointerDown = (event: PointerEvent, itemId: string) => {
+    if (event.button !== 0 || !selectedSection || selectedSection.items.length <= 1) return;
+
+    startItemDrag(itemId);
+    itemDragPointerId = event.pointerId;
+    itemDragHandleElement = event.currentTarget as HTMLElement;
+
+    itemDragHandleElement.setPointerCapture(event.pointerId);
+    window.addEventListener('pointermove', handleItemGripPointerMove);
+    window.addEventListener('pointerup', handleItemGripPointerUp);
+    window.addEventListener('pointercancel', resetItemDrag);
+  };
+
+  const handleItemGripPointerMove = (event: PointerEvent) => {
+    if (!draggedItemId || itemDragPointerId !== event.pointerId) return;
+
+    updateItemDragTarget(event.clientX, event.clientY);
+    event.preventDefault();
+  };
+
+  const handleItemGripPointerUp = (event: PointerEvent) => {
+    if (!draggedItemId || itemDragPointerId !== event.pointerId) return;
+
+    if (itemDragHandleElement?.hasPointerCapture(event.pointerId)) {
+      itemDragHandleElement.releasePointerCapture(event.pointerId);
+    }
+
+    finishItemDrag(event.clientX, event.clientY);
+    event.preventDefault();
+    resetItemDrag();
+  };
+
+  const handleItemGripMouseDown = (event: MouseEvent, itemId: string) => {
+    if (event.button !== 0 || !selectedSection || selectedSection.items.length <= 1) return;
+
+    if (!draggedItemId) {
+      startItemDrag(itemId);
+    }
+
+    itemDragMouseActive = true;
+    window.addEventListener('mousemove', handleItemGripMouseMove);
+    window.addEventListener('mouseup', handleItemGripMouseUp);
+    event.preventDefault();
+  };
+
+  const handleItemGripMouseMove = (event: MouseEvent) => {
+    if (!itemDragMouseActive || !draggedItemId) return;
+
+    updateItemDragTarget(event.clientX, event.clientY);
+    event.preventDefault();
+  };
+
+  const handleItemGripMouseUp = (event: MouseEvent) => {
+    if (!itemDragMouseActive || !draggedItemId) return;
+
+    finishItemDrag(event.clientX, event.clientY);
+    event.preventDefault();
+    resetItemDrag();
   };
 
   const handleLogoUpload = (event: Event) => {
@@ -3667,6 +4041,16 @@
 
               <div class="flex items-center gap-1">
                 <button
+                  aria-label={`Duplicate ${section.name || 'section'}`}
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-950"
+                  title="Duplicate section"
+                  type="button"
+                  onclick={() => duplicateSection(section.id)}
+                >
+                  <Copy class="h-4 w-4" />
+                </button>
+
+                <button
                   aria-label={`Move ${section.name || 'section'} up`}
                   class="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
                   disabled={sectionIndex === 0}
@@ -3733,6 +4117,15 @@
 
             <div class="flex gap-2">
               <Button
+                aria-label="Duplicate section"
+                color="light"
+                title="Duplicate section"
+                onclick={() => duplicateSection(selectedSection.id)}
+              >
+                <Copy class="h-4 w-4" />
+              </Button>
+
+              <Button
                 aria-label="Delete section"
                 color="red"
                 disabled={menu.sections.length === 1}
@@ -3745,10 +4138,175 @@
           </div>
 
           <div class="space-y-4">
+            {#if selectedSection.items.length > 0}
+              <div class="rounded-lg border border-brand-200 bg-brand-50 p-4" aria-live="polite">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <label class="inline-flex items-center gap-2 text-sm font-semibold text-brand-950">
+                    <input
+                      aria-label="Select all items in section"
+                      class="h-4 w-4 rounded border-brand-300 text-brand-600 focus:ring-brand-500"
+                      type="checkbox"
+                      checked={selectedItemIdsInSelectedSection.length === selectedSection.items.length}
+                      onchange={(event) => setAllItemsSelected(selectedSection, event.currentTarget.checked)}
+                    />
+                    <span>
+                      {selectedItemIdsInSelectedSection.length === 0
+                        ? 'Select items for batch actions'
+                        : `${selectedItemIdsInSelectedSection.length} selected in ${selectedSection.name || 'this section'}`}
+                    </span>
+                  </label>
+
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      aria-label="Move selected items up"
+                      class="inline-flex min-h-10 items-center justify-center rounded-lg border border-brand-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm transition hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!canMoveSelectedItems(selectedSection, -1)}
+                      type="button"
+                      onclick={() => moveSelectedItems(selectedSection, -1)}
+                    >
+                      <ArrowUp class="mr-2 h-4 w-4" />
+                      Move up
+                    </button>
+
+                    <button
+                      aria-label="Move selected items down"
+                      class="inline-flex min-h-10 items-center justify-center rounded-lg border border-brand-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm transition hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!canMoveSelectedItems(selectedSection, 1)}
+                      type="button"
+                      onclick={() => moveSelectedItems(selectedSection, 1)}
+                    >
+                      <ArrowDown class="mr-2 h-4 w-4" />
+                      Move down
+                    </button>
+
+                    <button
+                      aria-label="Duplicate selected items"
+                      class="inline-flex min-h-10 items-center justify-center rounded-lg border border-brand-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm transition hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={selectedItemIdsInSelectedSection.length === 0}
+                      type="button"
+                      onclick={() => duplicateSelectedItems(selectedSection)}
+                    >
+                      <Copy class="mr-2 h-4 w-4" />
+                      Duplicate
+                    </button>
+
+                    <button
+                      aria-label="Delete selected items"
+                      class="inline-flex min-h-10 items-center justify-center rounded-lg border border-red-200 bg-white px-3 text-sm font-medium text-red-700 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={selectedItemIdsInSelectedSection.length === 0}
+                      type="button"
+                      onclick={() => deleteSelectedItems(selectedSection)}
+                    >
+                      <Trash2 class="mr-2 h-4 w-4" />
+                      Delete
+                    </button>
+
+                    <button
+                      aria-label="Clear selected items"
+                      class="inline-flex min-h-10 items-center justify-center rounded-lg border border-brand-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm transition hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={selectedItemIdsInSelectedSection.length === 0}
+                      type="button"
+                      onclick={() => clearSelectedItems(selectedSection)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {/if}
+
             {#each selectedSection.items as item, itemIndex (item.id)}
-              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div
+                class={`relative rounded-lg border p-4 transition ${
+                  isItemSelected(item.id) ? 'border-brand-400 bg-brand-50/80 shadow-sm' : 'border-slate-200 bg-slate-50'
+                } ${draggedItemId === item.id ? 'opacity-60' : ''} ${
+                  itemDropTargetId === item.id && draggedItemId !== item.id ? 'ring-2 ring-brand-300 ring-offset-2' : ''
+                }`}
+                data-item-id={item.id}
+                role="group"
+                aria-label={`${item.name || 'Untitled item'} editor`}
+              >
+                {#if itemDropTargetId === item.id && draggedItemId !== item.id}
+                  <span
+                    class={`pointer-events-none absolute left-4 right-4 h-1 rounded-full bg-brand-500 ${
+                      itemDropPosition === 'before' ? '-top-1' : '-bottom-1'
+                    }`}
+                  ></span>
+                {/if}
+
                 <div class="grid gap-4">
-                  <div class="grid gap-3">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button
+                        aria-label={`Drag ${item.name || 'item'} to reorder`}
+                        class="inline-flex h-10 w-9 touch-none cursor-grab select-none items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-35 focus:outline-none focus:ring-4 focus:ring-brand-200"
+                        disabled={selectedSection.items.length <= 1}
+                        draggable="false"
+                        title="Drag to reorder"
+                        type="button"
+                        onpointerdown={(event) => handleItemGripPointerDown(event, item.id)}
+                        onpointermove={handleItemGripPointerMove}
+                        onpointerup={handleItemGripPointerUp}
+                        onpointercancel={resetItemDrag}
+                        onmousedown={(event) => handleItemGripMouseDown(event, item.id)}
+                      >
+                        <GripVertical class="h-5 w-5" aria-hidden="true" />
+                      </button>
+
+                      <label class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm">
+                        <input
+                          aria-label={`Select ${item.name || 'item'}`}
+                          class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                          type="checkbox"
+                          checked={isItemSelected(item.id)}
+                          onchange={(event) => toggleItemSelection(item.id, event.currentTarget.checked)}
+                        />
+                        Select
+                      </label>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button
+                        aria-label={`Move ${item.name || 'item'} up`}
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
+                        disabled={itemIndex === 0}
+                        title="Move up"
+                        type="button"
+                        onclick={() => moveItem(selectedSection, item.id, -1)}
+                      >
+                        <ArrowUp class="h-4 w-4" />
+                      </button>
+                      <button
+                        aria-label={`Move ${item.name || 'item'} down`}
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
+                        disabled={itemIndex === selectedSection.items.length - 1}
+                        title="Move down"
+                        type="button"
+                        onclick={() => moveItem(selectedSection, item.id, 1)}
+                      >
+                        <ArrowDown class="h-4 w-4" />
+                      </button>
+                      <button
+                        aria-label={`Duplicate ${item.name || 'menu item'}`}
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950"
+                        title="Duplicate item"
+                        type="button"
+                        onclick={() => duplicateItem(selectedSection, item.id)}
+                      >
+                        <Copy class="h-4 w-4" />
+                      </button>
+                      <Button
+                        aria-label={`Delete ${item.name || 'menu item'}`}
+                        color="light"
+                        title="Delete menu item"
+                        onclick={() => removeItem(selectedSection, item.id)}
+                      >
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem]">
                     <label class="block">
                       <span class="text-sm font-medium text-slate-700">Item name</span>
                       <input
@@ -3770,40 +4328,6 @@
                         />
                       </div>
                     </label>
-                  </div>
-
-                  <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                      <button
-                        aria-label={`Move ${item.name || 'item'} up`}
-                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
-                        disabled={itemIndex === 0}
-                        title="Move up"
-                        type="button"
-                        onclick={() => moveItem(selectedSection, item.id, -1)}
-                      >
-                        <ArrowUp class="h-4 w-4" />
-                      </button>
-                      <button
-                        aria-label={`Move ${item.name || 'item'} down`}
-                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
-                        disabled={itemIndex === selectedSection.items.length - 1}
-                        title="Move down"
-                        type="button"
-                        onclick={() => moveItem(selectedSection, item.id, 1)}
-                      >
-                        <ArrowDown class="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    <Button
-                      aria-label={`Delete ${item.name || 'menu item'}`}
-                      color="light"
-                      title="Delete menu item"
-                      onclick={() => removeItem(selectedSection, item.id)}
-                    >
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
                   </div>
 
                   <label class="block">
@@ -3832,6 +4356,28 @@
                 <span class="mt-1 text-sm text-brand-800">Click here to add an item to this section.</span>
               </button>
             {/if}
+
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <label class="block">
+                <span class="text-sm font-semibold text-slate-900">Quick add items</span>
+                <textarea
+                  class="mt-2 block min-h-28 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm leading-6 text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                  bind:value={quickAddItemsText}
+                  placeholder={`Cheese Pizza | House sauce and mozzarella | 12.99
+Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
+                ></textarea>
+              </label>
+
+              <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p class="text-xs leading-5 text-slate-500">Use one item per line: name | description | price.</p>
+                <Button color="light" disabled={quickAddItemDrafts.length === 0} onclick={() => addQuickItems(selectedSection)}>
+                  <Plus class="mr-2 h-4 w-4" />
+                  {quickAddItemDrafts.length === 0
+                    ? 'Add lines'
+                    : `Add ${quickAddItemDrafts.length} line${quickAddItemDrafts.length === 1 ? '' : 's'}`}
+                </Button>
+              </div>
+            </div>
 
             {#if selectedSection.items.length > 0}
               <div class="flex justify-center border-t border-slate-200 pt-4">
