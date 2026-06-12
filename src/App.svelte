@@ -15,6 +15,7 @@
     Image,
     LayoutTemplate,
     MapPin,
+    Palette,
     Phone,
     Plus,
     Printer,
@@ -30,6 +31,7 @@
 
   type LogoPlacement = 'above-eyebrow' | 'below-eyebrow' | 'left-eyebrow' | 'right-eyebrow';
   type SectionColumnSpan = 1 | 2;
+  type StylePresetId = 'simple' | 'elegant' | 'professional' | 'hometown';
 
   type MenuItem = {
     id: string;
@@ -58,6 +60,7 @@
     disclaimer: string;
     qrCodeUrl: string;
     qrCodeLabel: string;
+    stylePresetId: StylePresetId;
     logoDataUrl: string;
     logoName: string;
     logoPlacement: LogoPlacement;
@@ -91,6 +94,15 @@
     sections: TemplateSection[];
   };
 
+  type StylePreset = {
+    id: StylePresetId;
+    name: string;
+    description: string;
+    swatch: string;
+    previewClass: string;
+    variables: Record<string, string>;
+  };
+
   type CsvImportMode = 'append' | 'replace';
 
   type CsvPreviewRow = {
@@ -108,6 +120,93 @@
 
   const storageKey = 'menumaker:draft:v1';
   const draftFileSchemaVersion = 1;
+
+  const stylePresets: StylePreset[] = [
+    {
+      id: 'simple',
+      name: 'Simple',
+      description: 'Clean, spacious, and easy to read.',
+      swatch: '#16876f',
+      previewClass: 'menu-style-simple',
+      variables: {
+        '--menu-bg': '#fffdf8',
+        '--menu-text': '#172033',
+        '--menu-muted': '#5f6b7a',
+        '--menu-accent': '#16876f',
+        '--menu-rule': '#cbd5e1',
+        '--menu-heading-font': 'Georgia, ui-serif, serif',
+        '--menu-body-font': 'Inter, ui-sans-serif, system-ui, sans-serif',
+        '--menu-section-spacing': '2rem',
+        '--menu-item-spacing': '1rem',
+        '--menu-header-transform': 'uppercase',
+        '--menu-heading-letter-spacing': '0.2em',
+        '--menu-section-letter-spacing': '0.12em',
+      },
+    },
+    {
+      id: 'elegant',
+      name: 'Elegant',
+      description: 'Refined contrast with formal typography.',
+      swatch: '#8f5c2f',
+      previewClass: 'menu-style-elegant',
+      variables: {
+        '--menu-bg': '#fffaf2',
+        '--menu-text': '#221b16',
+        '--menu-muted': '#725f52',
+        '--menu-accent': '#8f5c2f',
+        '--menu-rule': '#d8c3aa',
+        '--menu-heading-font': 'Georgia, "Times New Roman", serif',
+        '--menu-body-font': 'Inter, ui-sans-serif, system-ui, sans-serif',
+        '--menu-section-spacing': '2.25rem',
+        '--menu-item-spacing': '1.1rem',
+        '--menu-header-transform': 'uppercase',
+        '--menu-heading-letter-spacing': '0.24em',
+        '--menu-section-letter-spacing': '0.16em',
+      },
+    },
+    {
+      id: 'professional',
+      name: 'Professional',
+      description: 'Structured, polished, and business-ready.',
+      swatch: '#1e4f79',
+      previewClass: 'menu-style-professional',
+      variables: {
+        '--menu-bg': '#f9fbfd',
+        '--menu-text': '#111827',
+        '--menu-muted': '#4b5563',
+        '--menu-accent': '#1e4f79',
+        '--menu-rule': '#b9c6d3',
+        '--menu-heading-font': 'Inter, ui-sans-serif, system-ui, sans-serif',
+        '--menu-body-font': 'Inter, ui-sans-serif, system-ui, sans-serif',
+        '--menu-section-spacing': '1.75rem',
+        '--menu-item-spacing': '0.85rem',
+        '--menu-header-transform': 'none',
+        '--menu-heading-letter-spacing': '0',
+        '--menu-section-letter-spacing': '0.08em',
+      },
+    },
+    {
+      id: 'hometown',
+      name: 'Hometown',
+      description: 'Warm, friendly, and casual.',
+      swatch: '#b5482d',
+      previewClass: 'menu-style-hometown',
+      variables: {
+        '--menu-bg': '#fff8ec',
+        '--menu-text': '#2d2118',
+        '--menu-muted': '#6f5b4d',
+        '--menu-accent': '#b5482d',
+        '--menu-rule': '#dfb99c',
+        '--menu-heading-font': 'Georgia, ui-serif, serif',
+        '--menu-body-font': 'Inter, ui-sans-serif, system-ui, sans-serif',
+        '--menu-section-spacing': '2rem',
+        '--menu-item-spacing': '1rem',
+        '--menu-header-transform': 'uppercase',
+        '--menu-heading-letter-spacing': '0.16em',
+        '--menu-section-letter-spacing': '0.1em',
+      },
+    },
+  ];
 
   const createId = () => crypto.randomUUID();
 
@@ -142,6 +241,7 @@
     disclaimer: 'Consuming raw or undercooked meats may increase your risk of foodborne illness.',
     qrCodeUrl: 'https://example.com/order',
     qrCodeLabel: 'Scan for online ordering',
+    stylePresetId: 'simple',
     logoDataUrl: '',
     logoName: '',
     logoPlacement: 'above-eyebrow',
@@ -820,6 +920,11 @@
     return 'above-eyebrow';
   };
 
+  const normalizeStylePresetId = (presetId: unknown): StylePresetId => {
+    if (stylePresets.some((preset) => preset.id === presetId)) return presetId as StylePresetId;
+    return 'simple';
+  };
+
   const normalizeSectionColumnSpan = (span: unknown, sectionName: string): SectionColumnSpan => {
     if (span === 1 || span === 2) return span;
     return defaultSectionColumnSpan(sectionName);
@@ -860,6 +965,7 @@
     disclaimer: '',
     qrCodeUrl: '',
     qrCodeLabel: '',
+    stylePresetId: 'simple',
     logoDataUrl: '',
     logoName: '',
     logoPlacement: 'above-eyebrow',
@@ -1049,6 +1155,7 @@
       logoDataUrl: normalizeTextField(value.logoDataUrl),
       logoName: normalizeTextField(value.logoName),
       logoPlacement: normalizeLogoPlacement(value.logoPlacement),
+      stylePresetId: normalizeStylePresetId(value.stylePresetId),
       sections: value.sections.map(normalizeImportedSection),
     };
 
@@ -1084,6 +1191,7 @@
         ...parsedMenu,
       };
       loadedMenu.logoPlacement = normalizeLogoPlacement(parsedMenu.logoPlacement);
+      loadedMenu.stylePresetId = normalizeStylePresetId(parsedMenu.stylePresetId);
       optionalDetailFields.forEach((field) => {
         loadedMenu[field] = normalizeTextField(parsedMenu[field]);
       });
@@ -1140,6 +1248,14 @@
   let qrCodeCaption = $derived(menu.qrCodeLabel.trim() || 'Scan for more');
   let csvPreviewSections = $derived(summarizeCsvRows(csvPreviewRows));
   let csvPreviewItemCount = $derived(csvPreviewRows.length);
+  let activeStylePreset = $derived(
+    stylePresets.find((preset) => preset.id === menu.stylePresetId) ?? stylePresets[0],
+  );
+  let activeStyleVariables = $derived(
+    Object.entries(activeStylePreset.variables)
+      .map(([key, value]) => `${key}: ${value};`)
+      .join(' '),
+  );
 
   const toWebsiteHref = (value: string) => {
     const trimmedValue = value.trim();
@@ -1889,6 +2005,44 @@
       <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div class="mb-4 flex items-start gap-3">
           <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <Palette class="h-5 w-5" />
+          </span>
+          <div>
+            <h2 class="text-xl font-semibold text-slate-950">Style preset</h2>
+            <p class="mt-1 text-sm text-slate-600">Apply a complete visual style without changing menu content.</p>
+          </div>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          {#each stylePresets as preset (preset.id)}
+            <button
+              class={`flex min-h-24 items-start gap-3 rounded-lg border p-4 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-brand-200 ${
+                menu.stylePresetId === preset.id
+                  ? 'border-brand-600 bg-brand-50'
+                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+              }`}
+              data-style-preset={preset.id}
+              type="button"
+              aria-pressed={menu.stylePresetId === preset.id}
+              onclick={() => (menu.stylePresetId = preset.id)}
+            >
+              <span
+                class="mt-1 h-7 w-7 shrink-0 rounded-full border border-white shadow ring-1 ring-slate-200"
+                style={`background: ${preset.swatch};`}
+                aria-hidden="true"
+              ></span>
+              <span>
+                <span class="block text-sm font-semibold text-slate-950">{preset.name}</span>
+                <span class="mt-1 block text-sm leading-6 text-slate-600">{preset.description}</span>
+              </span>
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-4 flex items-start gap-3">
+          <span class="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
             <MapPin class="h-5 w-5" />
           </span>
           <div>
@@ -2241,7 +2395,8 @@
 
         <div
           bind:this={previewElement}
-          class="menu-print-preview rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-inner sm:p-8"
+          class={`menu-print-preview ${activeStylePreset.previewClass} rounded-lg border border-slate-200 bg-[#fffdf8] p-6 shadow-inner sm:p-8`}
+          style={activeStyleVariables}
         >
           <div class="menu-print-header relative border-b border-slate-300 pb-6 text-center">
             {#if hasLogo && menu.logoPlacement === 'left-eyebrow'}

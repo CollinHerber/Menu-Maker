@@ -51,6 +51,90 @@ textarea {
   border-top: 1px solid #cbd5e1;
 }
 
+.menu-print-preview {
+  background: var(--menu-bg, #fffdf8) !important;
+  color: var(--menu-text, #172033);
+  font-family: var(--menu-body-font, var(--font-sans));
+}
+
+.menu-print-preview .menu-print-header {
+  border-color: var(--menu-rule, #cbd5e1);
+}
+
+.menu-print-preview .menu-print-header > p:first-of-type {
+  color: var(--menu-accent, #16876f);
+  letter-spacing: var(--menu-heading-letter-spacing, 0.2em);
+  text-transform: var(--menu-header-transform, uppercase);
+}
+
+.menu-print-preview h3 {
+  color: var(--menu-text, #172033);
+  font-family: var(--menu-heading-font, Georgia, ui-serif, serif);
+}
+
+.menu-print-preview h4,
+.menu-print-preview h5 {
+  color: var(--menu-text, #172033);
+}
+
+.menu-print-preview .menu-print-item > div > p {
+  color: var(--menu-text, #172033);
+}
+
+.menu-print-preview h4 {
+  letter-spacing: var(--menu-section-letter-spacing, 0.12em);
+}
+
+.menu-print-preview p,
+.menu-print-preview a,
+.menu-print-preview span {
+  color: inherit;
+}
+
+.menu-print-preview p,
+.menu-print-preview a {
+  color: var(--menu-muted, #5f6b7a);
+}
+
+.menu-print-preview .menu-print-grid {
+  gap: var(--menu-section-spacing, 2rem);
+}
+
+.menu-print-preview .menu-print-section-rule {
+  border-color: var(--menu-rule, #cbd5e1);
+}
+
+.menu-print-preview .menu-print-section .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-bottom: calc(var(--menu-item-spacing, 1rem) * var(--tw-space-y-reverse));
+  margin-top: calc(var(--menu-item-spacing, 1rem) * calc(1 - var(--tw-space-y-reverse)));
+}
+
+.menu-print-preview .text-brand-700 {
+  color: var(--menu-accent, #16876f) !important;
+}
+
+.menu-style-elegant .menu-print-section-heading {
+  font-family: var(--menu-heading-font, Georgia, ui-serif, serif);
+}
+
+.menu-style-professional .menu-print-header {
+  text-align: left;
+}
+
+.menu-style-professional .menu-print-header > div {
+  justify-content: flex-start;
+}
+
+.menu-style-hometown .menu-print-section-heading {
+  border-bottom: 2px solid var(--menu-rule, #dfb99c);
+  padding-bottom: 0.4rem;
+}
+
+.menu-style-hometown .menu-print-section-rule {
+  display: none;
+}
+
 .menu-print-footer {
   break-inside: avoid;
   page-break-inside: avoid;
