@@ -26,6 +26,8 @@
     Sparkles,
     StickyNote,
     Trash2,
+    Redo2,
+    Undo2,
     Upload,
     Utensils,
     X,
@@ -172,6 +174,16 @@
 
   type QuickAddItemDraft = Omit<MenuItem, 'id'>;
 
+  type DraftHistoryEntry = {
+    id: string;
+    itemCount: number;
+    label: string;
+    menuName: string;
+    savedAt: string;
+    sectionCount: number;
+    snapshot: string;
+  };
+
   type PreviewSectionChunk = {
     id: string;
     sectionId: string;
@@ -189,7 +201,10 @@
   };
 
   const storageKey = 'menumaker:draft:v1';
+  const historyStorageKey = 'menumaker:draft-history:v1';
   const draftFileSchemaVersion = 1;
+  const maxUndoSnapshots = 75;
+  const maxDraftHistoryEntries = 15;
 
   const defaultPrintSettings = (): PrintSettings => ({
     pageSize: 'letter',
@@ -1609,6 +1624,100 @@
     return normalizeImportedDraft(value.draft);
   };
 
+  const hasSavedDraft = () => {
+    if (typeof localStorage === 'undefined') return false;
+
+    return localStorage.getItem(storageKey) !== null;
+  };
+
+  const formatHistoryTimestamp = (value: string) => {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return 'just now';
+
+    return new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(date);
+  };
+
+  const summarizeDraftSnapshot = (snapshot: string) => {
+    try {
+      const draft = normalizeImportedDraft(JSON.parse(snapshot));
+
+      return {
+        itemCount: draft.sections.reduce((count, section) => count + section.items.length, 0),
+        menuName: draft.name.trim() || 'Untitled menu',
+        sectionCount: draft.sections.length,
+      };
+    } catch {
+      return {
+        itemCount: 0,
+        menuName: 'Untitled menu',
+        sectionCount: 0,
+      };
+    }
+  };
+
+  const createDraftHistoryEntry = (snapshot: string, label: string): DraftHistoryEntry => {
+    const summary = summarizeDraftSnapshot(snapshot);
+
+    return {
+      id: createId(),
+      label,
+      savedAt: new Date().toISOString(),
+      snapshot,
+      ...summary,
+    };
+  };
+
+  const normalizeDraftHistoryEntry = (value: unknown): DraftHistoryEntry | null => {
+    if (!isRecord(value) || typeof value.snapshot !== 'string') return null;
+
+    const summary = summarizeDraftSnapshot(value.snapshot);
+
+    return {
+      id: normalizeTextField(value.id) || createId(),
+      label: normalizeTextField(value.label) || 'Autosave',
+      savedAt: normalizeTextField(value.savedAt) || new Date().toISOString(),
+      snapshot: value.snapshot,
+      itemCount: typeof value.itemCount === 'number' ? value.itemCount : summary.itemCount,
+      menuName: normalizeTextField(value.menuName) || summary.menuName,
+      sectionCount: typeof value.sectionCount === 'number' ? value.sectionCount : summary.sectionCount,
+    };
+  };
+
+  const loadDraftHistory = () => {
+    if (typeof localStorage === 'undefined') return [];
+
+    try {
+      const saved = localStorage.getItem(historyStorageKey);
+      if (!saved) return [];
+
+      return (JSON.parse(saved) as unknown[])
+        .map(normalizeDraftHistoryEntry)
+        .filter((entry): entry is DraftHistoryEntry => entry !== null)
+        .slice(0, maxDraftHistoryEntries);
+    } catch {
+      return [];
+    }
+  };
+
+  const saveDraftHistoryEntries = (entries: DraftHistoryEntry[]) => {
+    if (typeof localStorage === 'undefined') return;
+
+    localStorage.setItem(historyStorageKey, JSON.stringify(entries.slice(0, maxDraftHistoryEntries)));
+  };
+
+  const ensureDraftHistoryEntry = (entries: DraftHistoryEntry[], snapshot: string, label: string) => {
+    if (entries[0]?.snapshot === snapshot) return entries;
+
+    return [
+      createDraftHistoryEntry(snapshot, label),
+      ...entries.filter((entry) => entry.snapshot !== snapshot),
+    ].slice(0, maxDraftHistoryEntries);
+  };
+
   const loadMenu = () => {
     if (typeof localStorage === 'undefined') return starterMenu();
 
@@ -1639,7 +1748,15 @@
     }
   };
 
+  const initialSavedDraftExists = hasSavedDraft();
   const initialMenu = loadMenu();
+  const initialMenuSnapshot = JSON.stringify(initialMenu);
+  const initialDraftHistory = ensureDraftHistoryEntry(
+    loadDraftHistory(),
+    initialMenuSnapshot,
+    initialSavedDraftExists ? 'Recovered draft' : 'Started draft',
+  );
+  saveDraftHistoryEntries(initialDraftHistory);
 
   let menu = $state<MenuDraft>(initialMenu);
   let mobileView = $state<'editor' | 'preview'>('editor');
@@ -1649,12 +1766,18 @@
   let sectionModalOpen = $state(false);
   let templateModalOpen = $state(false);
   let csvImportModalOpen = $state(false);
+  let historyModalOpen = $state(false);
+  let showRecoveryNotice = $state(initialSavedDraftExists);
   let pendingTemplateId = $state('');
   let previewElement = $state<HTMLDivElement | null>(null);
   let qrCodeDataUrl = $state('');
   let qrCodeError = $state('');
   let draftFileStatus = $state('');
   let draftFileError = $state('');
+  let autosaveStatus = $state(initialSavedDraftExists ? 'Recovered autosaved draft' : 'Autosaved locally');
+  let undoSnapshots = $state<string[]>([]);
+  let redoSnapshots = $state<string[]>([]);
+  let draftHistory = $state<DraftHistoryEntry[]>(initialDraftHistory);
   let csvFileName = $state('');
   let csvImportError = $state('');
   let csvImportMode = $state<CsvImportMode>('append');
@@ -1673,6 +1796,8 @@
   let itemDragPointerId = $state<number | null>(null);
   let itemDragMouseActive = $state(false);
   let itemDragHandleElement: HTMLElement | null = null;
+  let lastMenuSnapshot = initialMenuSnapshot;
+  let applyingHistorySnapshot = false;
 
   let selectedSection = $derived(
     menu.sections.find((section) => section.id === selectedSectionId) ?? menu.sections[0],
@@ -1688,6 +1813,8 @@
       .map((line) => parseQuickAddItemLine(line))
       .filter((item): item is QuickAddItemDraft => item !== null),
   );
+  let canUndo = $derived(undoSnapshots.length > 0);
+  let canRedo = $derived(redoSnapshots.length > 0);
 
   let itemCount = $derived(menu.sections.reduce((count, section) => count + section.items.length, 0));
   let hasMenuContent = $derived(menu.sections.some((section) => section.items.length > 0));
@@ -1943,8 +2070,41 @@
     };
   });
 
+  const recordDraftHistorySnapshot = (snapshot: string, label: string) => {
+    const nextHistory = ensureDraftHistoryEntry(draftHistory, snapshot, label);
+
+    if (nextHistory !== draftHistory) {
+      draftHistory = nextHistory;
+      saveDraftHistoryEntries(nextHistory);
+    }
+  };
+
+  const saveMenuSnapshot = (snapshot: string, label = 'Autosave') => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(storageKey, snapshot);
+    }
+
+    recordDraftHistorySnapshot(snapshot, label);
+    autosaveStatus = `${label} saved ${formatHistoryTimestamp(new Date().toISOString())}`;
+  };
+
   $effect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(menu));
+    const snapshot = JSON.stringify(menu);
+
+    if (snapshot === lastMenuSnapshot) {
+      saveMenuSnapshot(snapshot);
+      return;
+    }
+
+    if (applyingHistorySnapshot) {
+      applyingHistorySnapshot = false;
+    } else {
+      undoSnapshots = [...undoSnapshots.slice(-(maxUndoSnapshots - 1)), lastMenuSnapshot];
+      redoSnapshots = [];
+    }
+
+    lastMenuSnapshot = snapshot;
+    saveMenuSnapshot(snapshot);
   });
 
   const formatPrice = (price: string) => {
@@ -1975,6 +2135,93 @@
     menu.stylePresetId = presetId;
     resetDesignSettings();
   };
+
+  const restoreMenuSnapshot = (snapshot: string, statusMessage: string) => {
+    try {
+      const restoredMenu = normalizeImportedDraft(JSON.parse(snapshot));
+      applyingHistorySnapshot = true;
+      menu = restoredMenu;
+      selectedSectionId = restoredMenu.sections[0]?.id ?? '';
+      selectedItemIds = [];
+      quickAddItemsText = '';
+      showRecoveryNotice = false;
+      draftFileError = '';
+      draftFileStatus = statusMessage;
+      autosaveStatus = statusMessage;
+      resetItemDrag();
+    } catch {
+      draftFileStatus = '';
+      draftFileError = 'Could not restore that saved draft.';
+    }
+  };
+
+  const undoMenuChange = () => {
+    if (!canUndo) return;
+
+    const currentSnapshot = JSON.stringify(menu);
+    const previousSnapshot = undoSnapshots.at(-1);
+
+    if (!previousSnapshot) return;
+
+    undoSnapshots = undoSnapshots.slice(0, -1);
+    redoSnapshots = [currentSnapshot, ...redoSnapshots].slice(0, maxUndoSnapshots);
+    restoreMenuSnapshot(previousSnapshot, 'Undid last edit.');
+  };
+
+  const redoMenuChange = () => {
+    if (!canRedo) return;
+
+    const currentSnapshot = JSON.stringify(menu);
+    const nextSnapshot = redoSnapshots[0];
+
+    if (!nextSnapshot) return;
+
+    redoSnapshots = redoSnapshots.slice(1);
+    undoSnapshots = [...undoSnapshots.slice(-(maxUndoSnapshots - 1)), currentSnapshot];
+    restoreMenuSnapshot(nextSnapshot, 'Redid edit.');
+  };
+
+  const restoreDraftHistoryEntry = (entryId: string) => {
+    const entry = draftHistory.find((historyEntry) => historyEntry.id === entryId);
+
+    if (!entry) return;
+
+    const currentSnapshot = JSON.stringify(menu);
+
+    if (currentSnapshot !== entry.snapshot) {
+      undoSnapshots = [...undoSnapshots.slice(-(maxUndoSnapshots - 1)), currentSnapshot];
+      redoSnapshots = [];
+    }
+
+    restoreMenuSnapshot(entry.snapshot, `Restored ${entry.label.toLowerCase()} from ${formatHistoryTimestamp(entry.savedAt)}.`);
+    historyModalOpen = false;
+  };
+
+  const handleHistoryShortcut = (event: KeyboardEvent) => {
+    const key = event.key.toLowerCase();
+    const hasShortcutModifier = event.ctrlKey || event.metaKey;
+
+    if (!hasShortcutModifier || event.altKey) return;
+
+    if (key === 'z' && !event.shiftKey && canUndo) {
+      event.preventDefault();
+      undoMenuChange();
+      return;
+    }
+
+    if ((key === 'y' || (key === 'z' && event.shiftKey)) && canRedo) {
+      event.preventDefault();
+      redoMenuChange();
+    }
+  };
+
+  $effect(() => {
+    window.addEventListener('keydown', handleHistoryShortcut);
+
+    return () => {
+      window.removeEventListener('keydown', handleHistoryShortcut);
+    };
+  });
 
   const selectSection = (sectionId: string) => {
     if (selectedSectionId !== sectionId) {
@@ -2923,7 +3170,11 @@
     sectionModalOpen = false;
     templateModalOpen = false;
     csvImportModalOpen = false;
+    historyModalOpen = false;
+    showRecoveryNotice = false;
     pendingTemplateId = '';
+    selectedItemIds = [];
+    quickAddItemsText = '';
     resetCsvImport();
     draftFileError = '';
     draftFileStatus = '';
@@ -2939,6 +3190,51 @@
 <svelte:head>
   <title>{menu.name || 'MenuMaker'}</title>
 </svelte:head>
+
+<Modal bind:open={historyModalOpen} size="lg" title="Autosave history">
+  <div class="space-y-4">
+    <div class="flex items-start gap-3 rounded-lg border border-brand-100 bg-brand-50 p-4">
+      <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-700 shadow-sm">
+        <Clock class="h-5 w-5" />
+      </span>
+      <div>
+        <h2 class="text-lg font-semibold text-slate-950">Restore a recent local draft</h2>
+        <p class="mt-1 text-sm leading-6 text-slate-700">
+          Restore points stay in this browser and are capped to the latest {maxDraftHistoryEntries} snapshots.
+        </p>
+      </div>
+    </div>
+
+    {#if draftHistory.length === 0}
+      <div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+        <p class="text-sm font-medium text-slate-900">No restore points yet.</p>
+        <p class="mt-1 text-sm text-slate-600">Autosave will add snapshots as you edit this menu.</p>
+      </div>
+    {:else}
+      <div class="grid max-h-96 gap-3 overflow-auto pr-1">
+        {#each draftHistory as entry (entry.id)}
+          <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-history-entry={entry.id}>
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-base font-semibold text-slate-950">{entry.label}</h3>
+                <p class="mt-1 text-sm text-slate-600">{entry.menuName}</p>
+                <p class="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+                  {entry.sectionCount} section{entry.sectionCount === 1 ? '' : 's'} | {entry.itemCount} item{entry.itemCount === 1 ? '' : 's'}
+                </p>
+              </div>
+              <div class="text-right">
+                <p class="text-sm text-slate-500">{formatHistoryTimestamp(entry.savedAt)}</p>
+                <Button class="mt-3" color="light" onclick={() => restoreDraftHistoryEntry(entry.id)}>
+                  Restore
+                </Button>
+              </div>
+            </div>
+          </article>
+        {/each}
+      </div>
+    {/if}
+  </div>
+</Modal>
 
 <Modal bind:open={templateModalOpen} size="xl" title="Choose a template">
   <div class="space-y-5">
@@ -3200,7 +3496,39 @@
       </div>
 
       <div class="flex min-w-0 flex-col gap-2 lg:items-end">
-        <div class="editor-command-group grid w-full max-w-full grid-cols-6 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+        <div class="editor-command-group grid w-full max-w-full grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <button
+            class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-45 sm:px-4"
+            type="button"
+            aria-label="Undo last edit"
+            title="Undo (Ctrl+Z)"
+            disabled={!canUndo}
+            onclick={undoMenuChange}
+          >
+            <Undo2 class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">Undo</span>
+          </button>
+          <button
+            class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-45 sm:px-4"
+            type="button"
+            aria-label="Redo edit"
+            title="Redo (Ctrl+Y)"
+            disabled={!canRedo}
+            onclick={redoMenuChange}
+          >
+            <Redo2 class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">Redo</span>
+          </button>
+          <button
+            class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
+            type="button"
+            aria-label="Open autosave history"
+            title="History"
+            onclick={() => (historyModalOpen = true)}
+          >
+            <Clock class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">History</span>
+          </button>
           <button
             class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
             type="button"
@@ -3262,6 +3590,10 @@
           </button>
         </div>
 
+        <p class="max-w-xl text-left text-xs font-medium text-slate-500 lg:text-right" aria-live="polite">
+          {autosaveStatus}
+        </p>
+
         {#if draftFileError || draftFileStatus}
           <p
             class={`max-w-xl text-left text-sm lg:text-right ${draftFileError ? 'text-red-700' : 'text-slate-600'}`}
@@ -3273,6 +3605,26 @@
       </div>
     </div>
   </header>
+
+  {#if showRecoveryNotice}
+    <div class="mx-3 mt-3 rounded-lg border border-brand-200 bg-brand-50 p-4 shadow-sm xl:mx-5" role="status">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold text-brand-950">Recovered autosaved draft</h2>
+          <p class="mt-1 text-sm leading-6 text-brand-900">
+            Your last local draft was restored in this browser. Use History to restore an earlier snapshot.
+          </p>
+        </div>
+        <button
+          class="inline-flex min-h-9 items-center justify-center rounded-lg border border-brand-200 bg-white px-3 text-sm font-medium text-brand-900 shadow-sm transition hover:bg-brand-100 focus:outline-none focus:ring-4 focus:ring-brand-200"
+          type="button"
+          onclick={() => (showRecoveryNotice = false)}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  {/if}
 
   <div
     class="mobile-view-switch mx-3 mt-3 grid shrink-0 grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm xl:hidden"
