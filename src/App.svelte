@@ -2955,53 +2955,55 @@
           <div class="space-y-4">
             {#each selectedSection.items as item, itemIndex (item.id)}
               <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_7rem_auto_auto]">
-                  <label class="block">
-                    <span class="text-sm font-medium text-slate-700">Item name</span>
-                    <input
-                      class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                      bind:value={item.name}
-                      placeholder="Menu item"
-                    />
-                  </label>
-
-                  <label class="block">
-                    <span class="text-sm font-medium text-slate-700">Price</span>
-                    <div class="relative mt-2">
-                      <DollarSign class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <div class="grid gap-4">
+                  <div class="grid gap-3">
+                    <label class="block">
+                      <span class="text-sm font-medium text-slate-700">Item name</span>
                       <input
-                        class="block w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-8 pr-3 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                        bind:value={item.price}
-                        inputmode="decimal"
-                        placeholder="0"
+                        class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                        bind:value={item.name}
+                        placeholder="Menu item"
                       />
-                    </div>
-                  </label>
+                    </label>
 
-                  <div class="flex items-end gap-1">
-                    <button
-                      aria-label={`Move ${item.name || 'item'} up`}
-                      class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
-                      disabled={itemIndex === 0}
-                      title="Move up"
-                      type="button"
-                      onclick={() => moveItem(selectedSection, item.id, -1)}
-                    >
-                      <ArrowUp class="h-4 w-4" />
-                    </button>
-                    <button
-                      aria-label={`Move ${item.name || 'item'} down`}
-                      class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
-                      disabled={itemIndex === selectedSection.items.length - 1}
-                      title="Move down"
-                      type="button"
-                      onclick={() => moveItem(selectedSection, item.id, 1)}
-                    >
-                      <ArrowDown class="h-4 w-4" />
-                    </button>
+                    <label class="block max-w-40">
+                      <span class="text-sm font-medium text-slate-700">Price</span>
+                      <div class="relative mt-2">
+                        <DollarSign class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          class="block w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-8 pr-3 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                          bind:value={item.price}
+                          inputmode="decimal"
+                          placeholder="0"
+                        />
+                      </div>
+                    </label>
                   </div>
 
-                  <div class="flex items-end">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <button
+                        aria-label={`Move ${item.name || 'item'} up`}
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
+                        disabled={itemIndex === 0}
+                        title="Move up"
+                        type="button"
+                        onclick={() => moveItem(selectedSection, item.id, -1)}
+                      >
+                        <ArrowUp class="h-4 w-4" />
+                      </button>
+                      <button
+                        aria-label={`Move ${item.name || 'item'} down`}
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-35"
+                        disabled={itemIndex === selectedSection.items.length - 1}
+                        title="Move down"
+                        type="button"
+                        onclick={() => moveItem(selectedSection, item.id, 1)}
+                      >
+                        <ArrowDown class="h-4 w-4" />
+                      </button>
+                    </div>
+
                     <Button
                       aria-label={`Delete ${item.name || 'menu item'}`}
                       color="light"
@@ -3011,16 +3013,17 @@
                       <Trash2 class="h-4 w-4" />
                     </Button>
                   </div>
+
+                  <label class="block">
+                    <span class="text-sm font-medium text-slate-700">Description</span>
+                    <textarea
+                      class="mt-2 block min-h-24 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                      bind:value={item.description}
+                      placeholder="Optional item details"
+                    ></textarea>
+                  </label>
                 </div>
 
-                <label class="mt-3 block">
-                  <span class="text-sm font-medium text-slate-700">Description</span>
-                  <textarea
-                    class="mt-2 block min-h-20 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                    bind:value={item.description}
-                    placeholder="Optional item details"
-                  ></textarea>
-                </label>
               </div>
             {/each}
 
