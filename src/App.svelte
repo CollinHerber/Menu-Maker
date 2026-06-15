@@ -88,6 +88,7 @@
   type SectionHeadingAlignChoice = 'preset' | TextAlignChoice;
   type SectionBackgroundStyle = 'none' | 'tint' | 'box';
   type BadgeColorKey = 'green' | 'amber' | 'red' | 'blue' | 'purple' | 'slate';
+  type ItemImageShape = 'square' | 'rounded' | 'circle' | 'wide';
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -147,6 +148,14 @@
     color: BadgeColorKey;
   };
 
+  type ItemImageSettings = {
+    fit: ImageFit;
+    scale: number;
+    focalX: number;
+    focalY: number;
+    shape: ItemImageShape;
+  };
+
   type MenuItem = {
     id: string;
     name: string;
@@ -156,6 +165,8 @@
     imageName: string;
     imageAlt: string;
     badgeIds: string[];
+    imageUseSectionDefaults: boolean;
+    image: ItemImageSettings;
   };
 
   type MenuSection = {
@@ -168,6 +179,7 @@
     dividerStyle: DividerStyle;
     backgroundStyle: SectionBackgroundStyle;
     itemLayout: SectionItemLayoutChoice;
+    imageDefaults: ItemImageSettings;
     items: MenuItem[];
   };
 
@@ -295,6 +307,7 @@
     dividerStyle: DividerStyle;
     backgroundStyle: SectionBackgroundStyle;
     itemLayout: SectionItemLayoutChoice;
+    imageDefaults: ItemImageSettings;
     items: MenuItem[];
     isContinuation: boolean;
   };
@@ -466,6 +479,12 @@
     { label: 'Blue', value: 'blue' },
     { label: 'Purple', value: 'purple' },
     { label: 'Slate', value: 'slate' },
+  ];
+  const itemImageShapeOptions: Array<{ label: string; value: ItemImageShape }> = [
+    { label: 'Square', value: 'square' },
+    { label: 'Rounded', value: 'rounded' },
+    { label: 'Circle', value: 'circle' },
+    { label: 'Wide', value: 'wide' },
   ];
   const builtInBadges: ItemBadge[] = [
     { id: 'vegan', label: 'Vegan', shortCode: 'VG', color: 'green' },
@@ -832,6 +851,15 @@
 
   const createId = () => crypto.randomUUID();
 
+  const createItemImageSettings = (overrides: Partial<ItemImageSettings> = {}): ItemImageSettings => ({
+    fit: 'cover',
+    scale: 100,
+    focalX: 0,
+    focalY: 0,
+    shape: 'square',
+    ...overrides,
+  });
+
   const createItem = (overrides: Partial<MenuItem> = {}): MenuItem => ({
     id: createId(),
     name: '',
@@ -841,6 +869,8 @@
     imageName: '',
     imageAlt: '',
     badgeIds: [],
+    imageUseSectionDefaults: true,
+    image: createItemImageSettings(),
     ...overrides,
   });
 
@@ -857,6 +887,7 @@
     dividerStyle: 'preset',
     backgroundStyle: 'none',
     itemLayout: 'preset',
+    imageDefaults: createItemImageSettings(),
     items: [],
   });
 
@@ -871,6 +902,8 @@
       imageName: item.imageName,
       imageAlt: item.imageAlt,
       badgeIds: [...item.badgeIds],
+      imageUseSectionDefaults: item.imageUseSectionDefaults,
+      image: { ...item.image },
     });
 
   const cloneMenuSection = (section: MenuSection): MenuSection => ({
@@ -883,6 +916,7 @@
     dividerStyle: section.dividerStyle,
     backgroundStyle: section.backgroundStyle,
     itemLayout: section.itemLayout,
+    imageDefaults: { ...section.imageDefaults },
     items: section.items.map((item) => cloneMenuItem(item)),
   });
 
@@ -895,6 +929,8 @@
     imageName: item.imageName,
     imageAlt: item.imageAlt,
     badgeIds: [...(item.badgeIds ?? [])],
+    imageUseSectionDefaults: item.imageUseSectionDefaults ?? true,
+    image: { ...(item.image ?? createItemImageSettings()) },
   });
 
   const copyMenuSection = (section: MenuSection, preserveId = true): MenuSection => ({
@@ -907,6 +943,7 @@
     dividerStyle: section.dividerStyle,
     backgroundStyle: section.backgroundStyle,
     itemLayout: section.itemLayout,
+    imageDefaults: { ...(section.imageDefaults ?? createItemImageSettings()) },
     items: section.items.map((item) => copyMenuItem(item, preserveId)),
   });
 
@@ -1020,6 +1057,7 @@
         dividerStyle: 'preset',
         backgroundStyle: 'none',
         itemLayout: 'preset',
+        imageDefaults: createItemImageSettings(),
         items: [
           createItem({
             name: 'Onion Rings',
@@ -1048,6 +1086,7 @@
         dividerStyle: 'preset',
         backgroundStyle: 'none',
         itemLayout: 'preset',
+        imageDefaults: createItemImageSettings(),
         items: [
           createItem({
             name: 'Classic Beef Burger',
@@ -1076,6 +1115,7 @@
         dividerStyle: 'preset',
         backgroundStyle: 'none',
         itemLayout: 'preset',
+        imageDefaults: createItemImageSettings(),
         items: [
           createItem({
             name: 'Crispy Chicken Wrap',
@@ -1104,6 +1144,7 @@
         dividerStyle: 'preset',
         backgroundStyle: 'none',
         itemLayout: 'preset',
+        imageDefaults: createItemImageSettings(),
         items: [
           createItem({
             name: 'Cheese Pizza',
@@ -1132,6 +1173,7 @@
         dividerStyle: 'preset',
         backgroundStyle: 'none',
         itemLayout: 'preset',
+        imageDefaults: createItemImageSettings(),
         items: [
           createItem({
             name: 'Chicken Fried Steak',
@@ -2071,6 +2113,7 @@
         dividerStyle: section.dividerStyle ?? 'preset',
         backgroundStyle: section.backgroundStyle ?? 'none',
         itemLayout: section.itemLayout ?? 'preset',
+        imageDefaults: createItemImageSettings(),
         items: section.items.map((item) => createItem(item)),
       })),
     };
@@ -2209,6 +2252,22 @@
     return Array.from(sectionCounts, ([section, itemCount]) => ({ section, itemCount }));
   };
 
+  const normalizeItemImageShape = (value: unknown): ItemImageShape =>
+    value === 'rounded' || value === 'circle' || value === 'wide' ? value : 'square';
+
+  const normalizeItemImageSettings = (value: unknown): ItemImageSettings => {
+    const defaults = createItemImageSettings();
+    if (!isRecord(value)) return defaults;
+
+    return {
+      fit: value.fit === 'contain' ? 'contain' : 'cover',
+      scale: normalizeNumericSetting(value.scale, defaults.scale, 100, 250),
+      focalX: normalizeNumericSetting(value.focalX, defaults.focalX, -50, 50),
+      focalY: normalizeNumericSetting(value.focalY, defaults.focalY, -50, 50),
+      shape: normalizeItemImageShape(value.shape),
+    };
+  };
+
   const normalizeBadgeColor = (value: unknown): BadgeColorKey =>
     typeof value === 'string' && value in badgeColorStyles ? (value as BadgeColorKey) : 'slate';
 
@@ -2258,6 +2317,8 @@
       imageName: normalizeTextField(value.imageName),
       imageAlt: normalizeTextField(value.imageAlt),
       badgeIds: normalizeBadgeIds(value.badgeIds),
+      imageUseSectionDefaults: value.imageUseSectionDefaults !== false,
+      image: normalizeItemImageSettings(value.image),
     };
   };
 
@@ -2282,6 +2343,7 @@
       dividerStyle: normalizeDividerStyle(value.dividerStyle),
       backgroundStyle: normalizeSectionBackgroundStyle(value.backgroundStyle),
       itemLayout: normalizeSectionItemLayout(value.itemLayout),
+      imageDefaults: normalizeItemImageSettings(value.imageDefaults),
       items: value.items.map((item, itemIndex) => normalizeImportedItem(item, itemIndex, sectionIndex)),
     };
   };
@@ -2787,6 +2849,14 @@
 
   const getSectionItemLayout = (section: PreviewSectionChunk | MenuSection): ItemLayoutChoice =>
     section.itemLayout === 'preset' ? menu.designSettings.itemLayout : section.itemLayout;
+
+  const resolveItemImageSettings = (section: PreviewSectionChunk | MenuSection, item: MenuItem): ItemImageSettings =>
+    item.imageUseSectionDefaults ? section.imageDefaults : item.image;
+
+  const itemPhotoStyle = (settings: ItemImageSettings) =>
+    `object-fit: ${settings.fit}; object-position: ${50 + settings.focalX}% ${
+      50 + settings.focalY
+    }%; transform: scale(${settings.scale / 100});`;
 
   const getSectionRuleConfig = (section: PreviewSectionChunk | MenuSection) => {
     const scale = menu.designSettings.dividerWeightScale / 100;
@@ -3396,6 +3466,7 @@
     dividerStyle: section.dividerStyle,
     backgroundStyle: section.backgroundStyle,
     itemLayout: section.itemLayout,
+    imageDefaults: section.imageDefaults,
     items,
     isContinuation: chunkIndex > 0,
   });
@@ -3473,6 +3544,7 @@
               dividerStyle: chunk.dividerStyle,
               backgroundStyle: chunk.backgroundStyle,
               itemLayout: chunk.itemLayout,
+              imageDefaults: chunk.imageDefaults,
               items: chunk.items,
             },
             nextItems,
@@ -3500,6 +3572,7 @@
             dividerStyle: chunk.dividerStyle,
             backgroundStyle: chunk.backgroundStyle,
             itemLayout: chunk.itemLayout,
+            imageDefaults: chunk.imageDefaults,
             items: chunk.items,
           },
             chunkItems,
@@ -5037,6 +5110,98 @@
 </Modal>
 
 <a class="skip-link" href="#menu-editor">Skip to menu editor</a>
+
+{#snippet photoSettingsControls(settings: ItemImageSettings)}
+  <div class="grid gap-4">
+    <div class="grid gap-4 sm:grid-cols-2">
+      <fieldset>
+        <legend class="text-sm font-medium text-slate-700">Photo fit</legend>
+        <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+          {#each logoFitOptions as fit (fit)}
+            <button
+              aria-pressed={settings.fit === fit}
+              class={`rounded-md px-3 py-2 text-sm font-medium capitalize transition ${
+                settings.fit === fit ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              type="button"
+              onclick={() => (settings.fit = fit)}
+            >
+              {fit}
+            </button>
+          {/each}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend class="text-sm font-medium text-slate-700">Photo shape</legend>
+        <div class="mt-2 grid grid-cols-4 rounded-lg border border-slate-300 bg-white p-1">
+          {#each itemImageShapeOptions as option (option.value)}
+            <button
+              aria-pressed={settings.shape === option.value}
+              class={`rounded-md px-2 py-2 text-sm font-medium transition ${
+                settings.shape === option.value ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              type="button"
+              onclick={() => (settings.shape = option.value)}
+            >
+              {option.label}
+            </button>
+          {/each}
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="grid gap-3 sm:grid-cols-3">
+      <label class="block">
+        <span class="flex items-center justify-between gap-2 text-sm font-medium text-slate-700">
+          Zoom
+          <span class="text-xs font-semibold text-slate-500">{Math.round(settings.scale)}%</span>
+        </span>
+        <input
+          class="mt-2 block w-full accent-brand-600"
+          max="250"
+          min="100"
+          step="5"
+          type="range"
+          value={settings.scale}
+          oninput={(event) => (settings.scale = Number(event.currentTarget.value))}
+        />
+      </label>
+
+      <label class="block">
+        <span class="flex items-center justify-between gap-2 text-sm font-medium text-slate-700">
+          Focus X
+          <span class="text-xs font-semibold text-slate-500">{Math.round(settings.focalX)}</span>
+        </span>
+        <input
+          class="mt-2 block w-full accent-brand-600"
+          max="50"
+          min="-50"
+          step="5"
+          type="range"
+          value={settings.focalX}
+          oninput={(event) => (settings.focalX = Number(event.currentTarget.value))}
+        />
+      </label>
+
+      <label class="block">
+        <span class="flex items-center justify-between gap-2 text-sm font-medium text-slate-700">
+          Focus Y
+          <span class="text-xs font-semibold text-slate-500">{Math.round(settings.focalY)}</span>
+        </span>
+        <input
+          class="mt-2 block w-full accent-brand-600"
+          max="50"
+          min="-50"
+          step="5"
+          type="range"
+          value={settings.focalY}
+          oninput={(event) => (settings.focalY = Number(event.currentTarget.value))}
+        />
+      </label>
+    </div>
+  </div>
+{/snippet}
 
 <main class="app-shell flex h-screen min-h-0 flex-col overflow-hidden">
   <header
@@ -6786,6 +6951,21 @@
                 </div>
               </fieldset>
             </div>
+
+            {#if selectedSection.imageLayout !== 'none'}
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Image class="h-4 w-4 text-brand-700" />
+                  Default photo settings
+                </div>
+                <p class="mt-1 text-xs leading-5 text-slate-500">
+                  Applied to every {selectedSection.imageLayout === 'thumbnail' ? 'thumbnail' : 'banner'} photo in this section, unless an item overrides it.
+                </p>
+                <div class="mt-3">
+                  {@render photoSettingsControls(selectedSection.imageDefaults)}
+                </div>
+              </div>
+            {/if}
           </div>
 
           <div class="space-y-4">
@@ -7030,12 +7210,17 @@
                     </div>
 
                     {#if item.imageDataUrl}
-                      <div class="mt-4 grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
-                        <img
-                          class="h-24 w-28 rounded-lg border border-slate-200 object-cover shadow-sm"
-                          src={item.imageDataUrl}
-                          alt={item.imageAlt || item.name || 'Menu item photo'}
-                        />
+                      {@const resolvedItemPhoto = item.imageUseSectionDefaults ? selectedSection.imageDefaults : item.image}
+                      <div class="mt-4 grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start">
+                        <span
+                          class={`item-photo-edit-frame h-28 w-28 border border-slate-200 shadow-sm menu-photo-shape-${resolvedItemPhoto.shape}`}
+                        >
+                          <img
+                            src={item.imageDataUrl}
+                            alt={item.imageAlt || item.name || 'Menu item photo'}
+                            style={itemPhotoStyle(resolvedItemPhoto)}
+                          />
+                        </span>
                         <label class="block">
                           <span class="text-sm font-medium text-slate-700">Photo description</span>
                           <input
@@ -7044,6 +7229,31 @@
                             placeholder="Alt text for exports and screen readers"
                           />
                         </label>
+                      </div>
+
+                      <div class="mt-4 border-t border-slate-100 pt-4">
+                        <label class="flex items-start gap-3">
+                          <input
+                            class="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                            type="checkbox"
+                            checked={item.imageUseSectionDefaults}
+                            onchange={(event) => (item.imageUseSectionDefaults = event.currentTarget.checked)}
+                          />
+                          <span>
+                            <span class="block text-sm font-medium text-slate-800">Use section photo defaults</span>
+                            <span class="mt-0.5 block text-xs leading-5 text-slate-500">
+                              {item.imageUseSectionDefaults
+                                ? 'This photo follows the section default crop, zoom, and shape.'
+                                : 'Custom crop, zoom, and shape for this item only.'}
+                            </span>
+                          </span>
+                        </label>
+
+                        {#if !item.imageUseSectionDefaults}
+                          <div class="mt-3">
+                            {@render photoSettingsControls(item.image)}
+                          </div>
+                        {/if}
                       </div>
                     {/if}
                   </div>
@@ -7305,24 +7515,31 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                       <div class="space-y-4">
                         {#each section.items as item (item.id)}
                           {@const itemBadges = resolveItemBadges(item)}
+                          {@const itemPhoto = resolveItemImageSettings(section, item)}
                           <article
                             class={`menu-print-item menu-print-item-${section.imageLayout} menu-item-layout-${getSectionItemLayout(section)} menu-description-indent-${menu.designSettings.descriptionIndent}`}
                           >
                             {#if item.imageDataUrl && section.imageLayout === 'banner'}
-                              <img
-                                class="menu-print-item-photo menu-print-item-photo-banner"
-                                src={item.imageDataUrl}
-                                alt={item.imageAlt || item.name || 'Menu item photo'}
-                              />
+                              <span class={`menu-print-item-photo-frame menu-print-item-photo-banner menu-photo-shape-${itemPhoto.shape}`}>
+                                <img
+                                  class="menu-print-item-photo"
+                                  src={item.imageDataUrl}
+                                  alt={item.imageAlt || item.name || 'Menu item photo'}
+                                  style={itemPhotoStyle(itemPhoto)}
+                                />
+                              </span>
                             {/if}
 
                             <div class={item.imageDataUrl && section.imageLayout === 'thumbnail' ? 'menu-print-item-content menu-print-item-content-with-photo' : 'menu-print-item-content'}>
                               {#if item.imageDataUrl && section.imageLayout === 'thumbnail'}
-                                <img
-                                  class="menu-print-item-photo menu-print-item-photo-thumbnail"
-                                  src={item.imageDataUrl}
-                                  alt={item.imageAlt || item.name || 'Menu item photo'}
-                                />
+                                <span class={`menu-print-item-photo-frame menu-print-item-photo-thumbnail menu-photo-shape-${itemPhoto.shape}`}>
+                                  <img
+                                    class="menu-print-item-photo"
+                                    src={item.imageDataUrl}
+                                    alt={item.imageAlt || item.name || 'Menu item photo'}
+                                    style={itemPhotoStyle(itemPhoto)}
+                                  />
+                                </span>
                               {/if}
 
                               <div class="menu-print-item-body">

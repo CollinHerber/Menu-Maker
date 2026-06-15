@@ -389,12 +389,21 @@ textarea {
   grid-template-columns: minmax(3.75rem, 4.5rem) minmax(0, 1fr);
 }
 
-.menu-print-item-photo {
+.menu-print-item-photo-frame {
+  background: #f1f5f9;
   border-radius: 0.35rem;
   break-inside: avoid;
   display: block;
-  object-fit: cover;
+  overflow: hidden;
   page-break-inside: avoid;
+}
+
+.menu-print-item-photo {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
+  width: 100%;
 }
 
 .menu-print-item-photo-thumbnail {
@@ -406,6 +415,41 @@ textarea {
   aspect-ratio: 4 / 1.35;
   margin-bottom: 0.75rem;
   width: 100%;
+}
+
+/* Photo shapes apply to thumbnails; banners stay banner-shaped but still honor crop/focal. */
+.menu-photo-shape-rounded.menu-print-item-photo-thumbnail {
+  border-radius: 0.85rem;
+}
+
+.menu-photo-shape-circle.menu-print-item-photo-thumbnail {
+  border-radius: 9999px;
+}
+
+.menu-photo-shape-wide.menu-print-item-photo-thumbnail {
+  aspect-ratio: 4 / 3;
+}
+
+.item-photo-edit-frame {
+  background: #f1f5f9;
+  border-radius: 0.5rem;
+  display: block;
+  overflow: hidden;
+}
+
+.item-photo-edit-frame img {
+  display: block;
+  height: 100%;
+  transform-origin: center;
+  width: 100%;
+}
+
+.item-photo-edit-frame.menu-photo-shape-rounded {
+  border-radius: 0.85rem;
+}
+
+.item-photo-edit-frame.menu-photo-shape-circle {
+  border-radius: 9999px;
 }
 
 .menu-print-preview h5,
