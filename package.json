@@ -19,6 +19,7 @@
     "@popperjs/core": "latest",
     "flowbite": "latest",
     "flowbite-svelte": "latest",
+    "html2canvas": "^1.4.1",
     "qrcode": "^1.5.4",
     "tailwind-merge": "latest"
   },

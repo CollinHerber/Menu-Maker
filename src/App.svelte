@@ -1,5 +1,6 @@
 <script lang="ts">
   import QRCode from 'qrcode';
+  import html2canvas from 'html2canvas';
   import { Button, Modal } from 'flowbite-svelte';
   import {
     ArrowDown,
@@ -42,6 +43,7 @@
   type PrintDensity = 'comfortable' | 'compact';
   type EditorPanelId = 'menu' | 'sections' | 'design' | 'print' | 'details';
   type WizardStep = 'basics' | 'style' | 'logo';
+  type ExportImageFormat = 'png' | 'jpeg';
   type SectionDropPosition = 'before' | 'after';
   type DesignSettingKey =
     | 'titleScale'
@@ -211,6 +213,14 @@
     sections: PreviewSectionChunk[];
     showFooter: boolean;
     showHeader: boolean;
+  };
+
+  type PdfPageImage = {
+    imageBytes: Uint8Array;
+    imageHeight: number;
+    imageWidth: number;
+    pageHeight: number;
+    pageWidth: number;
   };
 
   const storageKey = 'menumaker:draft:v1';
@@ -1880,6 +1890,7 @@
   let csvImportError = $state('');
   let csvImportMode = $state<CsvImportMode>('append');
   let csvPreviewRows = $state<CsvPreviewRow[]>([]);
+  let isExporting = $state(false);
   let draggedSectionId = $state('');
   let sectionDropTargetId = $state('');
   let sectionDropPosition = $state<SectionDropPosition>('after');
@@ -3203,6 +3214,20 @@
     menu.logoName = '';
   };
 
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const downloadUrl = URL.createObjectURL(blob);
+    const downloadLink = document.createElement('a');
+
+    downloadLink.href = downloadUrl;
+    downloadLink.download = fileName;
+    document.body.append(downloadLink);
+    downloadLink.click();
+    downloadLink.remove();
+    URL.revokeObjectURL(downloadUrl);
+  };
+
+  const menuFileBaseName = () => sanitizeFileName(menu.name) || 'menu';
+
   const exportDraft = () => {
     const draftFile: MenuDraftFile = {
       app: 'MenuMaker',
@@ -3212,19 +3237,243 @@
     };
     const serializedDraft = JSON.stringify(draftFile, null, 2);
     const blob = new Blob([serializedDraft], { type: 'application/json' });
-    const downloadUrl = URL.createObjectURL(blob);
-    const downloadLink = document.createElement('a');
-    const fileName = `${sanitizeFileName(menu.name) || 'menu'}-menumaker-draft.json`;
+    const fileName = `${menuFileBaseName()}-menumaker-draft.json`;
 
-    downloadLink.href = downloadUrl;
-    downloadLink.download = fileName;
-    document.body.append(downloadLink);
-    downloadLink.click();
-    downloadLink.remove();
-    URL.revokeObjectURL(downloadUrl);
+    downloadBlob(blob, fileName);
 
     draftFileError = '';
     draftFileStatus = `Exported ${fileName}.`;
+  };
+
+  const canvasToBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) =>
+    new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Could not render the menu export.'));
+          }
+        },
+        type,
+        quality,
+      );
+    });
+
+  const blobToBytes = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
+
+  const sanitizeCanvasUnsupportedColors = (value: string) => value.replace(/\b(?:oklch|oklab|lch|lab)\([^)]*\)/g, '#64748b');
+
+  const collectExportStyles = () =>
+    sanitizeCanvasUnsupportedColors(
+      Array.from(document.styleSheets)
+        .map((styleSheet) => {
+          try {
+            return Array.from(styleSheet.cssRules)
+              .map((rule) => rule.cssText)
+              .join('\n');
+          } catch {
+            return '';
+          }
+        })
+        .filter(Boolean)
+        .join('\n'),
+    );
+
+  const renderElementToCanvas = async (element: HTMLElement) => {
+    const rect = element.getBoundingClientRect();
+    const width = Math.ceil(Math.max(rect.width, element.scrollWidth));
+    const height = Math.ceil(Math.max(rect.height, element.scrollHeight));
+
+    if (width <= 0 || height <= 0) {
+      throw new Error('Open the menu preview before exporting.');
+    }
+
+    const exportTargetId = createId();
+    const exportStyles = collectExportStyles();
+    element.dataset.exportTarget = exportTargetId;
+
+    try {
+      return await html2canvas(element, {
+        backgroundColor: '#ffffff',
+        height,
+        logging: false,
+        scale: 2,
+        useCORS: true,
+        width,
+        windowHeight: Math.max(document.documentElement.scrollHeight, height),
+        windowWidth: Math.max(document.documentElement.scrollWidth, width),
+        onclone: (clonedDocument) => {
+          const clonedElement = clonedDocument.querySelector<HTMLElement>(`[data-export-target="${exportTargetId}"]`);
+          const sanitizedStyle = clonedDocument.createElement('style');
+          const overrideStyle = clonedDocument.createElement('style');
+
+          clonedDocument.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => styleNode.remove());
+          sanitizedStyle.textContent = exportStyles;
+          clonedDocument.head.append(sanitizedStyle);
+
+          overrideStyle.textContent = `
+            html,
+            body {
+              background: #ffffff !important;
+              color: ${activeTextColor} !important;
+            }
+            [data-export-target="${exportTargetId}"] {
+              background-color: ${activeBackgroundColor} !important;
+              color: ${activeTextColor} !important;
+            }
+            [data-export-target="${exportTargetId}"],
+            [data-export-target="${exportTargetId}"] * {
+              border-color: ${activeRuleColor} !important;
+              outline-color: ${activeRuleColor} !important;
+              text-decoration-color: currentColor !important;
+            }
+          `;
+          clonedDocument.head.append(overrideStyle);
+
+          if (!clonedElement) return;
+
+          clonedElement.style.margin = '0';
+          clonedElement.style.transform = 'none';
+          clonedElement.style.boxShadow = 'none';
+          clonedElement.querySelectorAll<HTMLElement>('.menu-print-preview').forEach((pageElement) => {
+            pageElement.style.boxShadow = 'none';
+          });
+        },
+      });
+    } finally {
+      delete element.dataset.exportTarget;
+    }
+  };
+
+  const createPdfBlob = (pages: PdfPageImage[]) => {
+    const encoder = new TextEncoder();
+    const chunks: BlobPart[] = [];
+    const offsets = new Map<number, number>();
+    let byteOffset = 0;
+
+    const append = (chunk: string | Uint8Array) => {
+      const bytes = typeof chunk === 'string' ? encoder.encode(chunk) : chunk;
+      const buffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buffer).set(bytes);
+
+      chunks.push(buffer);
+      byteOffset += bytes.length;
+    };
+
+    const appendObject = (objectId: number, objectChunks: Array<string | Uint8Array>) => {
+      offsets.set(objectId, byteOffset);
+      append(`${objectId} 0 obj\n`);
+      objectChunks.forEach((chunk) => append(chunk));
+      append('\nendobj\n');
+    };
+
+    const pageObjectIds = pages.map((_, index) => 3 + index * 3);
+    const maxObjectId = 2 + pages.length * 3;
+
+    append('%PDF-1.4\n');
+    appendObject(1, ['<< /Type /Catalog /Pages 2 0 R >>']);
+    appendObject(2, [`<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`]);
+
+    pages.forEach((page, index) => {
+      const pageObjectId = 3 + index * 3;
+      const contentObjectId = pageObjectId + 1;
+      const imageObjectId = pageObjectId + 2;
+      const imageName = `Im${index + 1}`;
+      const content = `q\n${page.pageWidth.toFixed(2)} 0 0 ${page.pageHeight.toFixed(2)} 0 0 cm\n/${imageName} Do\nQ`;
+
+      appendObject(pageObjectId, [
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.pageWidth.toFixed(2)} ${page.pageHeight.toFixed(
+          2,
+        )}] /Resources << /XObject << /${imageName} ${imageObjectId} 0 R >> >> /Contents ${contentObjectId} 0 R >>`,
+      ]);
+      appendObject(contentObjectId, [`<< /Length ${encoder.encode(content).length} >>\nstream\n${content}\nendstream`]);
+      appendObject(imageObjectId, [
+        `<< /Type /XObject /Subtype /Image /Width ${page.imageWidth} /Height ${page.imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.imageBytes.length} >>\nstream\n`,
+        page.imageBytes,
+        '\nendstream',
+      ]);
+    });
+
+    const xrefOffset = byteOffset;
+    append(`xref\n0 ${maxObjectId + 1}\n`);
+    append('0000000000 65535 f \n');
+
+    for (let objectId = 1; objectId <= maxObjectId; objectId += 1) {
+      append(`${String(offsets.get(objectId) ?? 0).padStart(10, '0')} 00000 n \n`);
+    }
+
+    append(`trailer\n<< /Size ${maxObjectId + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+    return new Blob(chunks, { type: 'application/pdf' });
+  };
+
+  const exportMenuImage = async (format: ExportImageFormat) => {
+    if (!previewElement || isExporting) return;
+
+    isExporting = true;
+    draftFileStatus = `Preparing ${format.toUpperCase()} export...`;
+    draftFileError = '';
+
+    try {
+      const canvas = await renderElementToCanvas(previewElement);
+      const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+      const extension = format === 'png' ? 'png' : 'jpg';
+      const blob = await canvasToBlob(canvas, mimeType, format === 'jpeg' ? 0.92 : undefined);
+      const fileName = `${menuFileBaseName()}-menu.${extension}`;
+
+      downloadBlob(blob, fileName);
+      draftFileStatus = `Exported ${fileName}.`;
+    } catch (error) {
+      draftFileStatus = '';
+      draftFileError = error instanceof Error ? error.message : 'Could not export the menu image.';
+    } finally {
+      isExporting = false;
+    }
+  };
+
+  const exportMenuPdf = async () => {
+    if (!previewElement || isExporting) return;
+
+    const pageElements = Array.from(previewElement.querySelectorAll<HTMLElement>('.menu-print-preview'));
+
+    if (pageElements.length === 0) {
+      draftFileError = 'Open the menu preview before exporting.';
+      draftFileStatus = '';
+      return;
+    }
+
+    isExporting = true;
+    draftFileStatus = 'Preparing PDF export...';
+    draftFileError = '';
+
+    try {
+      const pageWidth = printPageWidth * 72;
+      const pageHeight = printPageHeight * 72;
+      const pages = await Promise.all(
+        pageElements.map(async (pageElement) => {
+          const canvas = await renderElementToCanvas(pageElement);
+          const imageBlob = await canvasToBlob(canvas, 'image/jpeg', 0.94);
+
+          return {
+            imageBytes: await blobToBytes(imageBlob),
+            imageHeight: canvas.height,
+            imageWidth: canvas.width,
+            pageHeight,
+            pageWidth,
+          };
+        }),
+      );
+      const fileName = `${menuFileBaseName()}-menu.pdf`;
+
+      downloadBlob(createPdfBlob(pages), fileName);
+      draftFileStatus = `Exported ${fileName}.`;
+    } catch (error) {
+      draftFileStatus = '';
+      draftFileError = error instanceof Error ? error.message : 'Could not export the menu PDF.';
+    } finally {
+      isExporting = false;
+    }
   };
 
   const resetCsvImport = () => {
@@ -4660,6 +4909,48 @@
               {/each}
             </div>
           </fieldset>
+        </div>
+
+        <div class="mt-5 border-t border-slate-200 pt-5">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 class="text-base font-semibold text-slate-950">Download finished menu</h3>
+              <p class="mt-1 text-sm leading-6 text-slate-600">Export the current preview as a PDF or image file.</p>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
+              <button
+                class="inline-flex min-h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-wait disabled:opacity-60"
+                type="button"
+                disabled={isExporting}
+                onclick={exportMenuPdf}
+              >
+                <FileText class="mr-2 h-4 w-4" />
+                PDF
+              </button>
+              <button
+                class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-wait disabled:opacity-60"
+                type="button"
+                disabled={isExporting}
+                onclick={() => exportMenuImage('png')}
+              >
+                <Image class="mr-2 h-4 w-4" />
+                PNG
+              </button>
+              <button
+                class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-wait disabled:opacity-60"
+                type="button"
+                disabled={isExporting}
+                onclick={() => exportMenuImage('jpeg')}
+              >
+                <Image class="mr-2 h-4 w-4" />
+                JPEG
+              </button>
+            </div>
+          </div>
+
+          {#if isExporting}
+            <p class="mt-3 text-sm font-medium text-slate-600" role="status">Preparing export...</p>
+          {/if}
         </div>
 
         {#if printWarnings.length > 0}
