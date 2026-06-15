@@ -41,6 +41,7 @@
   type PrintMargin = 'compact' | 'standard' | 'wide';
   type PrintDensity = 'comfortable' | 'compact';
   type EditorPanelId = 'menu' | 'sections' | 'design' | 'print' | 'details';
+  type WizardStep = 'basics' | 'style' | 'logo';
   type SectionDropPosition = 'before' | 'after';
   type DesignSettingKey =
     | 'titleScale'
@@ -273,6 +274,11 @@
     { id: 'design', label: 'Design', description: 'Visual presets' },
     { id: 'print', label: 'Print', description: 'Page setup' },
     { id: 'details', label: 'Details', description: 'Contact and QR details' },
+  ];
+  const wizardSteps: Array<{ id: WizardStep; label: string }> = [
+    { id: 'basics', label: 'Basics' },
+    { id: 'style', label: 'Style' },
+    { id: 'logo', label: 'Logo' },
   ];
 
   const defaultDesignSettings = (): DesignSettings => ({
@@ -1851,8 +1857,16 @@
   let templateModalOpen = $state(false);
   let csvImportModalOpen = $state(false);
   let historyModalOpen = $state(false);
+  let wizardModalOpen = $state(!initialSavedDraftExists);
+  let wizardStep = $state<WizardStep>('basics');
   let showRecoveryNotice = $state(initialSavedDraftExists);
   let pendingTemplateId = $state('');
+  let wizardName = $state(initialMenu.name);
+  let wizardSubtitle = $state(initialMenu.subtitle);
+  let wizardTemplateId = $state(menuTemplates[0]?.id ?? '');
+  let wizardStylePresetId = $state<StylePresetId>(initialMenu.stylePresetId);
+  let wizardLogoDataUrl = $state(initialMenu.logoDataUrl);
+  let wizardLogoName = $state(initialMenu.logoName);
   let previewElement = $state<HTMLDivElement | null>(null);
   let qrCodeDataUrl = $state('');
   let qrCodeError = $state('');
@@ -1886,6 +1900,10 @@
   let selectedSection = $derived(
     menu.sections.find((section) => section.id === selectedSectionId) ?? menu.sections[0],
   );
+  let selectedWizardTemplate = $derived(
+    menuTemplates.find((template) => template.id === wizardTemplateId) ?? menuTemplates[0],
+  );
+  let wizardCanContinueBasics = $derived(wizardName.trim().length > 0 && Boolean(selectedWizardTemplate));
   let selectedItemIdsInSelectedSection = $derived(
     selectedSection
       ? selectedItemIds.filter((itemId) => selectedSection.items.some((item) => item.id === itemId))
@@ -2219,6 +2237,67 @@
   const applyStylePreset = (presetId: StylePresetId) => {
     menu.stylePresetId = presetId;
     resetDesignSettings();
+  };
+
+  const resetWizardFromDraft = (draft: MenuDraft = menu) => {
+    wizardStep = 'basics';
+    wizardName = draft.name;
+    wizardSubtitle = draft.subtitle;
+    wizardTemplateId = menuTemplates[0]?.id ?? '';
+    wizardStylePresetId = draft.stylePresetId;
+    wizardLogoDataUrl = draft.logoDataUrl;
+    wizardLogoName = draft.logoName;
+  };
+
+  const openWizard = () => {
+    resetWizardFromDraft(menu);
+    wizardModalOpen = true;
+  };
+
+  const skipWizard = () => {
+    wizardModalOpen = false;
+  };
+
+  const handleWizardLogoUpload = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      if (typeof reader.result !== 'string') return;
+
+      wizardLogoDataUrl = reader.result;
+      wizardLogoName = file.name;
+      input.value = '';
+    });
+    reader.readAsDataURL(file);
+  };
+
+  const removeWizardLogo = () => {
+    wizardLogoDataUrl = '';
+    wizardLogoName = '';
+  };
+
+  const completeWizard = () => {
+    if (!selectedWizardTemplate || !wizardCanContinueBasics) return;
+
+    const wizardDraft = createDraftFromTemplate(selectedWizardTemplate);
+    wizardDraft.name = wizardName.trim();
+    wizardDraft.subtitle = wizardSubtitle.trim();
+    wizardDraft.stylePresetId = wizardStylePresetId;
+    wizardDraft.logoDataUrl = wizardLogoDataUrl;
+    wizardDraft.logoName = wizardLogoName;
+    wizardDraft.logoPlacement = wizardLogoDataUrl ? 'above-eyebrow' : wizardDraft.logoPlacement;
+
+    menu = wizardDraft;
+    selectedSectionId = wizardDraft.sections[0]?.id ?? '';
+    activeEditorPanel = 'sections';
+    wizardModalOpen = false;
+    showRecoveryNotice = false;
+    draftFileError = '';
+    draftFileStatus = `Created ${selectedWizardTemplate.name} menu from the wizard.`;
   };
 
   const restoreMenuSnapshot = (snapshot: string, statusMessage: string) => {
@@ -3260,6 +3339,8 @@
     templateModalOpen = false;
     csvImportModalOpen = false;
     historyModalOpen = false;
+    resetWizardFromDraft(defaultMenu);
+    wizardModalOpen = true;
     showRecoveryNotice = false;
     pendingTemplateId = '';
     selectedItemIds = [];
@@ -3279,6 +3360,193 @@
 <svelte:head>
   <title>{menu.name || 'MenuMaker'}</title>
 </svelte:head>
+
+<Modal bind:open={wizardModalOpen} size="xl" title="Create your menu">
+  <div class="space-y-5">
+    <div class="grid gap-2 sm:grid-cols-3" aria-label="Wizard steps">
+      {#each wizardSteps as step, stepIndex (step.id)}
+        <button
+          aria-current={wizardStep === step.id ? 'step' : undefined}
+          class={`rounded-lg border px-4 py-3 text-left transition ${
+            wizardStep === step.id
+              ? 'border-brand-600 bg-brand-50 text-brand-950'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+          } disabled:cursor-not-allowed disabled:opacity-45`}
+          disabled={step.id !== 'basics' && !wizardCanContinueBasics}
+          type="button"
+          onclick={() => (wizardStep = step.id)}
+        >
+          <span class="block text-xs font-semibold uppercase tracking-[0.12em]">Step {stepIndex + 1}</span>
+          <span class="mt-1 block text-sm font-semibold">{step.label}</span>
+        </button>
+      {/each}
+    </div>
+
+    {#if wizardStep === 'basics'}
+      <div class="grid gap-5">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="text-sm font-medium text-slate-700">Restaurant or menu name</span>
+            <input
+              class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+              bind:value={wizardName}
+              placeholder="Main Street Grill"
+            />
+          </label>
+
+          <label class="block">
+            <span class="text-sm font-medium text-slate-700">Subtitle</span>
+            <input
+              class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+              bind:value={wizardSubtitle}
+              placeholder="Small town favorites served fresh"
+            />
+          </label>
+        </div>
+
+        <fieldset>
+          <legend class="text-sm font-semibold text-slate-900">Menu type</legend>
+          <div class="mt-3 grid gap-3 md:grid-cols-2">
+            {#each menuTemplates as template (template.id)}
+              <button
+                aria-pressed={wizardTemplateId === template.id}
+                class={`min-h-28 rounded-lg border p-4 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-brand-200 ${
+                  wizardTemplateId === template.id
+                    ? 'border-brand-600 bg-brand-50 text-brand-950'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+                type="button"
+                onclick={() => (wizardTemplateId = template.id)}
+              >
+                <span class="block text-sm font-semibold text-slate-950">{template.name}</span>
+                <span class="mt-1 block text-sm leading-6">{template.description}</span>
+                <span class="mt-3 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  {templateItemCount(template)} items
+                </span>
+              </button>
+            {/each}
+          </div>
+        </fieldset>
+      </div>
+    {:else if wizardStep === 'style'}
+      <fieldset>
+        <legend class="text-sm font-semibold text-slate-900">Starting style</legend>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+          {#each stylePresets as preset (preset.id)}
+            <button
+              aria-pressed={wizardStylePresetId === preset.id}
+              class={`flex min-h-24 items-start gap-3 rounded-lg border p-4 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-brand-200 ${
+                wizardStylePresetId === preset.id
+                  ? 'border-brand-600 bg-brand-50'
+                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+              }`}
+              type="button"
+              onclick={() => (wizardStylePresetId = preset.id)}
+            >
+              <span
+                class="mt-1 h-7 w-7 shrink-0 rounded-full border border-white shadow ring-1 ring-slate-200"
+                style={`background: ${preset.swatch};`}
+                aria-hidden="true"
+              ></span>
+              <span>
+                <span class="block text-sm font-semibold text-slate-950">{preset.name}</span>
+                <span class="mt-1 block text-sm leading-6 text-slate-600">{preset.description}</span>
+              </span>
+            </button>
+          {/each}
+        </div>
+      </fieldset>
+    {:else}
+      <div class="grid gap-5">
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold text-slate-950">Optional logo</h2>
+              <p class="mt-1 text-sm leading-6 text-slate-600">Add one now or set it later from the Menu tab.</p>
+            </div>
+            <label class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 focus-within:ring-4 focus-within:ring-brand-200">
+              <Upload class="mr-2 h-4 w-4" />
+              {wizardLogoDataUrl ? 'Change logo' : 'Add logo'}
+              <input class="sr-only" type="file" accept="image/*" onchange={handleWizardLogoUpload} />
+            </label>
+          </div>
+
+          {#if wizardLogoDataUrl}
+            <div class="mt-4 flex flex-wrap items-center gap-4">
+              <div class="flex h-20 w-28 items-center justify-center rounded-lg border border-slate-200 bg-white p-3">
+                <img class="max-h-full max-w-full object-contain" src={wizardLogoDataUrl} alt={wizardLogoName || 'Wizard logo'} />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium text-slate-900">{wizardLogoName || 'Uploaded logo'}</p>
+                <button class="mt-2 text-sm font-medium text-red-700 hover:text-red-800" type="button" onclick={removeWizardLogo}>
+                  Remove logo
+                </button>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <div class="rounded-lg border border-brand-100 bg-brand-50 p-4">
+          <h2 class="text-base font-semibold text-brand-950">Ready to start</h2>
+          <p class="mt-1 text-sm leading-6 text-brand-900">
+            {wizardName.trim() || 'Untitled menu'} will use the {selectedWizardTemplate?.name ?? 'selected'} structure with the
+            {stylePresets.find((preset) => preset.id === wizardStylePresetId)?.name ?? 'selected'} style.
+          </p>
+        </div>
+      </div>
+    {/if}
+
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+      <button
+        class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200"
+        type="button"
+        onclick={skipWizard}
+      >
+        Skip wizard
+      </button>
+
+      <div class="flex flex-wrap justify-end gap-2">
+        {#if wizardStep !== 'basics'}
+          <button
+            class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200"
+            type="button"
+            onclick={() => (wizardStep = wizardStep === 'logo' ? 'style' : 'basics')}
+          >
+            Back
+          </button>
+        {/if}
+
+        {#if wizardStep === 'basics'}
+          <button
+            class="inline-flex min-h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!wizardCanContinueBasics}
+            type="button"
+            onclick={() => (wizardStep = 'style')}
+          >
+            Next
+          </button>
+        {:else if wizardStep === 'style'}
+          <button
+            class="inline-flex min-h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-200"
+            type="button"
+            onclick={() => (wizardStep = 'logo')}
+          >
+            Next
+          </button>
+        {:else}
+          <button
+            class="inline-flex min-h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!wizardCanContinueBasics}
+            type="button"
+            onclick={completeWizard}
+          >
+            Create menu
+          </button>
+        {/if}
+      </div>
+    </div>
+  </div>
+</Modal>
 
 <Modal bind:open={historyModalOpen} size="lg" title="Autosave history">
   <div class="space-y-4">
@@ -3617,6 +3885,16 @@
           >
             <Clock class="h-4 w-4 sm:mr-2" />
             <span class="hidden sm:inline">History</span>
+          </button>
+          <button
+            class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
+            type="button"
+            aria-label="Open menu wizard"
+            title="Wizard"
+            onclick={openWizard}
+          >
+            <Sparkles class="h-4 w-4 sm:mr-2" />
+            <span class="hidden sm:inline">Wizard</span>
           </button>
           <button
             class="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-brand-200 sm:px-4"
