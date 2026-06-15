@@ -518,6 +518,83 @@ textarea {
   transform: translateY(-0.2em);
 }
 
+/* Item sizes and modifier groups */
+.menu-print-preview .menu-print-item-sizes,
+.menu-print-preview .menu-print-item-modifiers {
+  color: var(--menu-text, #172033);
+  font-size: var(--menu-description-size, 0.875rem);
+  line-height: var(--menu-body-line-height, 1.5);
+  margin-top: 0.35rem;
+}
+
+.menu-print-item-sizes-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 1rem;
+}
+
+.menu-print-item-sizes-inline .menu-print-size-label {
+  margin-right: 0.3rem;
+}
+
+.menu-print-item-sizes-stacked {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.menu-print-size-row {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.menu-print-size-leader {
+  border-bottom: 1px dotted var(--menu-rule, #cbd5e1);
+  flex: 1 1 auto;
+  min-width: 1.5rem;
+  transform: translateY(-0.2em);
+}
+
+.menu-print-size-price,
+.menu-print-modifier-price {
+  flex-shrink: 0;
+  font-weight: var(--menu-price-weight, 600);
+}
+
+.menu-print-item-modifiers {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.menu-print-modifier-name {
+  display: block;
+  font-weight: 600;
+}
+
+.menu-print-modifier-options-list {
+  display: grid;
+  gap: 0.05rem;
+  margin-top: 0.1rem;
+}
+
+.menu-print-modifier-option {
+  align-items: baseline;
+  color: var(--menu-muted, #5f6b7a);
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.menu-print-modifier-options-inline {
+  color: var(--menu-muted, #5f6b7a);
+}
+
+.menu-print-preview .menu-item-layout-centered .menu-print-item-sizes-inline,
+.menu-print-preview .menu-item-layout-centered .menu-print-item-modifiers {
+  justify-content: center;
+  text-align: center;
+}
+
 .menu-section-bg-tint,
 .menu-section-bg-box {
   border-radius: 0.5rem;

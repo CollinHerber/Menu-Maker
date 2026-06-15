@@ -89,6 +89,8 @@
   type SectionBackgroundStyle = 'none' | 'tint' | 'box';
   type BadgeColorKey = 'green' | 'amber' | 'red' | 'blue' | 'purple' | 'slate';
   type ItemImageShape = 'square' | 'rounded' | 'circle' | 'wide';
+  type SizeDisplay = 'inline' | 'stacked';
+  type ModifierDisplay = 'list' | 'inline';
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -139,6 +141,8 @@
     priceCurrencyStyle: PriceCurrencyStyle;
     priceDecimalStyle: PriceDecimalStyle;
     descriptionIndent: DescriptionIndent;
+    sizeDisplay: SizeDisplay;
+    modifierDisplay: ModifierDisplay;
   };
 
   type ItemBadge = {
@@ -156,6 +160,24 @@
     shape: ItemImageShape;
   };
 
+  type ItemSize = {
+    id: string;
+    label: string;
+    price: string;
+  };
+
+  type ModifierOption = {
+    id: string;
+    label: string;
+    price: string;
+  };
+
+  type ModifierGroup = {
+    id: string;
+    name: string;
+    options: ModifierOption[];
+  };
+
   type MenuItem = {
     id: string;
     name: string;
@@ -167,6 +189,8 @@
     badgeIds: string[];
     imageUseSectionDefaults: boolean;
     image: ItemImageSettings;
+    sizes: ItemSize[];
+    modifierGroups: ModifierGroup[];
   };
 
   type MenuSection = {
@@ -486,6 +510,14 @@
     { label: 'Circle', value: 'circle' },
     { label: 'Wide', value: 'wide' },
   ];
+  const sizeDisplayOptions: Array<{ label: string; value: SizeDisplay }> = [
+    { label: 'Stacked', value: 'stacked' },
+    { label: 'Inline', value: 'inline' },
+  ];
+  const modifierDisplayOptions: Array<{ label: string; value: ModifierDisplay }> = [
+    { label: 'List', value: 'list' },
+    { label: 'Inline', value: 'inline' },
+  ];
   const builtInBadges: ItemBadge[] = [
     { id: 'vegan', label: 'Vegan', shortCode: 'VG', color: 'green' },
     { id: 'vegetarian', label: 'Vegetarian', shortCode: 'V', color: 'green' },
@@ -552,6 +584,8 @@
     priceCurrencyStyle: 'symbol',
     priceDecimalStyle: 'always',
     descriptionIndent: 'none',
+    sizeDisplay: 'stacked',
+    modifierDisplay: 'list',
   });
 
   const headingFontStacks: Record<Exclude<HeadingFontChoice, 'preset'>, string> = {
@@ -871,6 +905,8 @@
     badgeIds: [],
     imageUseSectionDefaults: true,
     image: createItemImageSettings(),
+    sizes: [],
+    modifierGroups: [],
     ...overrides,
   });
 
@@ -904,6 +940,12 @@
       badgeIds: [...item.badgeIds],
       imageUseSectionDefaults: item.imageUseSectionDefaults,
       image: { ...item.image },
+      sizes: item.sizes.map((size) => ({ ...size, id: createId() })),
+      modifierGroups: item.modifierGroups.map((group) => ({
+        ...group,
+        id: createId(),
+        options: group.options.map((option) => ({ ...option, id: createId() })),
+      })),
     });
 
   const cloneMenuSection = (section: MenuSection): MenuSection => ({
@@ -931,6 +973,11 @@
     badgeIds: [...(item.badgeIds ?? [])],
     imageUseSectionDefaults: item.imageUseSectionDefaults ?? true,
     image: { ...(item.image ?? createItemImageSettings()) },
+    sizes: (item.sizes ?? []).map((size) => ({ ...size })),
+    modifierGroups: (item.modifierGroups ?? []).map((group) => ({
+      ...group,
+      options: group.options.map((option) => ({ ...option })),
+    })),
   });
 
   const copyMenuSection = (section: MenuSection, preserveId = true): MenuSection => ({
@@ -1963,6 +2010,8 @@
       priceCurrencyStyle: normalizePriceCurrencyStyle(value.priceCurrencyStyle),
       priceDecimalStyle: normalizePriceDecimalStyle(value.priceDecimalStyle),
       descriptionIndent: normalizeDescriptionIndent(value.descriptionIndent),
+      sizeDisplay: value.sizeDisplay === 'inline' ? 'inline' : 'stacked',
+      modifierDisplay: value.modifierDisplay === 'inline' ? 'inline' : 'list',
     };
   };
 
@@ -2268,6 +2317,41 @@
     };
   };
 
+  const normalizeItemSizes = (value: unknown): ItemSize[] => {
+    if (!Array.isArray(value)) return [];
+
+    return value
+      .filter(isRecord)
+      .map((entry) => ({
+        id: normalizeTextField(entry.id) || createId(),
+        label: normalizeTextField(entry.label),
+        price: normalizeTextField(entry.price),
+      }))
+      .filter((size) => size.label.trim().length > 0 || size.price.trim().length > 0);
+  };
+
+  const normalizeModifierGroups = (value: unknown): ModifierGroup[] => {
+    if (!Array.isArray(value)) return [];
+
+    return value
+      .filter(isRecord)
+      .map((group) => ({
+        id: normalizeTextField(group.id) || createId(),
+        name: normalizeTextField(group.name),
+        options: Array.isArray(group.options)
+          ? group.options
+              .filter(isRecord)
+              .map((option) => ({
+                id: normalizeTextField(option.id) || createId(),
+                label: normalizeTextField(option.label),
+                price: normalizeTextField(option.price),
+              }))
+              .filter((option) => option.label.trim().length > 0 || option.price.trim().length > 0)
+          : [],
+      }))
+      .filter((group) => group.name.trim().length > 0 || group.options.length > 0);
+  };
+
   const normalizeBadgeColor = (value: unknown): BadgeColorKey =>
     typeof value === 'string' && value in badgeColorStyles ? (value as BadgeColorKey) : 'slate';
 
@@ -2319,6 +2403,8 @@
       badgeIds: normalizeBadgeIds(value.badgeIds),
       imageUseSectionDefaults: value.imageUseSectionDefaults !== false,
       image: normalizeItemImageSettings(value.image),
+      sizes: normalizeItemSizes(value.sizes),
+      modifierGroups: normalizeModifierGroups(value.modifierGroups),
     };
   };
 
@@ -3372,8 +3458,22 @@
       imageHeight = isNarrowColumn ? 104 : 126;
     }
 
+    let extrasHeight = 0;
+    if (item.sizes.length > 0) {
+      extrasHeight +=
+        4 + (menu.designSettings.sizeDisplay === 'inline' ? descriptionLineHeight : item.sizes.length * descriptionLineHeight);
+    }
+    if (item.modifierGroups.length > 0) {
+      extrasHeight += item.modifierGroups.reduce((groupHeight, group) => {
+        const optionLines = menu.designSettings.modifierDisplay === 'inline' ? 1 : group.options.length;
+        return groupHeight + descriptionLineHeight + optionLines * descriptionLineHeight + 4;
+      }, 0);
+    }
+
     const textHeight =
-      nameLines * nameLineHeight + (descriptionLines > 0 ? descriptionLines * descriptionLineHeight + 8 : 0);
+      nameLines * nameLineHeight +
+      (descriptionLines > 0 ? descriptionLines * descriptionLineHeight + 8 : 0) +
+      extrasHeight;
 
     return imageLayout === 'thumbnail' ? Math.max(textHeight, imageHeight) : textHeight + imageHeight;
   };
@@ -4218,6 +4318,42 @@
     item.badgeIds = item.badgeIds.includes(badgeId)
       ? item.badgeIds.filter((id) => id !== badgeId)
       : [...item.badgeIds, badgeId];
+  };
+
+  const addItemSize = (item: MenuItem) => {
+    item.sizes = [...item.sizes, { id: createId(), label: '', price: '' }];
+  };
+
+  const removeItemSize = (item: MenuItem, sizeId: string) => {
+    item.sizes = item.sizes.filter((size) => size.id !== sizeId);
+  };
+
+  const addModifierGroup = (item: MenuItem) => {
+    item.modifierGroups = [
+      ...item.modifierGroups,
+      { id: createId(), name: 'Choose an option', options: [{ id: createId(), label: '', price: '' }] },
+    ];
+  };
+
+  const removeModifierGroup = (item: MenuItem, groupId: string) => {
+    item.modifierGroups = item.modifierGroups.filter((group) => group.id !== groupId);
+  };
+
+  const addModifierOption = (group: ModifierGroup) => {
+    group.options = [...group.options, { id: createId(), label: '', price: '' }];
+  };
+
+  const removeModifierOption = (group: ModifierGroup, optionId: string) => {
+    group.options = group.options.filter((option) => option.id !== optionId);
+  };
+
+  const formatAddonPrice = (price: string) => {
+    const trimmed = price.trim();
+    if (!trimmed) return '';
+    const unsigned = trimmed.replace(/^[+-]/, '');
+    const numeric = Number(unsigned.replace(/[$,]/g, ''));
+    if (Number.isNaN(numeric)) return formatPrice(trimmed);
+    return `${trimmed.startsWith('-') ? '-' : '+'}${formatPrice(unsigned)}`;
   };
 
   const addCustomBadge = () => {
@@ -6079,6 +6215,48 @@
                   </div>
                 </div>
               </div>
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <span class="text-xs font-medium uppercase text-slate-500">Size display</span>
+                  <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+                    {#each sizeDisplayOptions as option (option.value)}
+                      <button
+                        aria-pressed={menu.designSettings.sizeDisplay === option.value}
+                        class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                          menu.designSettings.sizeDisplay === option.value
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.designSettings.sizeDisplay = option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+
+                <div>
+                  <span class="text-xs font-medium uppercase text-slate-500">Modifier display</span>
+                  <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+                    {#each modifierDisplayOptions as option (option.value)}
+                      <button
+                        aria-pressed={menu.designSettings.modifierDisplay === option.value}
+                        class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                          menu.designSettings.modifierDisplay === option.value
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.designSettings.modifierDisplay = option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              </div>
             </div>
           </fieldset>
 
@@ -7287,6 +7465,118 @@
                       {/each}
                     </div>
                   </div>
+
+                  <div class="rounded-lg border border-slate-200 bg-white p-4">
+                    <div class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <DollarSign class="h-4 w-4 text-brand-700" />
+                      Sizes &amp; prices
+                    </div>
+                    <p class="mt-1 text-xs leading-5 text-slate-500">
+                      Add size-based prices like Small / Large. Leave empty to keep a single price.
+                    </p>
+
+                    {#if item.sizes.length > 0}
+                      <div class="mt-3 grid gap-2">
+                        {#each item.sizes as size (size.id)}
+                          <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-center">
+                            <input
+                              class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                              bind:value={size.label}
+                              placeholder="Size (e.g. Small)"
+                            />
+                            <div class="relative">
+                              <DollarSign class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                              <input
+                                class="block w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                                bind:value={size.price}
+                                inputmode="decimal"
+                                placeholder="0"
+                              />
+                            </div>
+                            <Button color="light" aria-label="Remove size" title="Remove size" onclick={() => removeItemSize(item, size.id)}>
+                              <X class="h-4 w-4" />
+                            </Button>
+                          </div>
+                        {/each}
+                      </div>
+                    {/if}
+
+                    <div class="mt-3">
+                      <Button color="light" onclick={() => addItemSize(item)}>
+                        <Plus class="mr-2 h-4 w-4" />
+                        Add size
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div class="rounded-lg border border-slate-200 bg-white p-4">
+                    <div class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <Utensils class="h-4 w-4 text-brand-700" />
+                      Modifier groups
+                    </div>
+                    <p class="mt-1 text-xs leading-5 text-slate-500">
+                      Add option groups like Add protein, Choose a side, or Substitute. Prices are optional.
+                    </p>
+
+                    {#if item.modifierGroups.length > 0}
+                      <div class="mt-3 grid gap-3">
+                        {#each item.modifierGroups as group (group.id)}
+                          <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <div class="flex items-center gap-2">
+                              <input
+                                class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                                bind:value={group.name}
+                                placeholder="Group name (e.g. Add protein)"
+                              />
+                              <Button color="light" aria-label="Remove group" title="Remove modifier group" onclick={() => removeModifierGroup(item, group.id)}>
+                                <Trash2 class="h-4 w-4" />
+                              </Button>
+                            </div>
+
+                            {#if group.options.length > 0}
+                              <div class="mt-2 grid gap-2">
+                                {#each group.options as option (option.id)}
+                                  <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-center">
+                                    <input
+                                      class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                                      bind:value={option.label}
+                                      placeholder="Option (e.g. Grilled chicken)"
+                                    />
+                                    <div class="relative">
+                                      <DollarSign class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                      <input
+                                        class="block w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                                        bind:value={option.price}
+                                        inputmode="decimal"
+                                        placeholder="+0"
+                                      />
+                                    </div>
+                                    <Button color="light" aria-label="Remove option" title="Remove option" onclick={() => removeModifierOption(group, option.id)}>
+                                      <X class="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                {/each}
+                              </div>
+                            {/if}
+
+                            <div class="mt-2">
+                              <Button color="light" onclick={() => addModifierOption(group)}>
+                                <Plus class="mr-2 h-4 w-4" />
+                                Add option
+                              </Button>
+                            </div>
+                          </div>
+                        {/each}
+                      </div>
+                    {/if}
+
+                    <div class="mt-3">
+                      <Button color="light" onclick={() => addModifierGroup(item)}>
+                        <Plus class="mr-2 h-4 w-4" />
+                        Add modifier group
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -7588,6 +7878,30 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                                     </p>
                                   </div>
                                 {/if}
+                                {#if item.sizes.length > 0}
+                                  {#if menu.designSettings.sizeDisplay === 'inline'}
+                                    <div class="menu-print-item-sizes menu-print-item-sizes-inline">
+                                      {#each item.sizes as size (size.id)}
+                                        <span class="menu-print-size">
+                                          <span class="menu-print-size-label">{size.label || 'Size'}</span>
+                                          {#if size.price.trim()}
+                                            <span class="menu-print-size-price">{formatPrice(size.price)}</span>
+                                          {/if}
+                                        </span>
+                                      {/each}
+                                    </div>
+                                  {:else}
+                                    <div class="menu-print-item-sizes menu-print-item-sizes-stacked">
+                                      {#each item.sizes as size (size.id)}
+                                        <div class="menu-print-size-row">
+                                          <span class="menu-print-size-label">{size.label || 'Size'}</span>
+                                          <span class="menu-print-size-leader" aria-hidden="true"></span>
+                                          <span class="menu-print-size-price">{size.price.trim() ? formatPrice(size.price) : ''}</span>
+                                        </div>
+                                      {/each}
+                                    </div>
+                                  {/if}
+                                {/if}
                                 {#if itemBadges.length > 0}
                                   <div
                                     class={`menu-print-item-badges mt-1.5 flex flex-wrap gap-1 ${
@@ -7605,6 +7919,37 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                                   <p class="menu-print-item-description mt-1 max-w-prose text-sm leading-6 text-slate-600">
                                     {item.description}
                                   </p>
+                                {/if}
+                                {#if item.modifierGroups.length > 0}
+                                  <div class="menu-print-item-modifiers">
+                                    {#each item.modifierGroups as group (group.id)}
+                                      {#if group.name.trim() || group.options.length > 0}
+                                        <div class="menu-print-modifier-group">
+                                          {#if group.name.trim()}
+                                            <span class="menu-print-modifier-name">{group.name}</span>
+                                          {/if}
+                                          {#if menu.designSettings.modifierDisplay === 'inline'}
+                                            <span class="menu-print-modifier-options-inline">
+                                              {#each group.options as option, optionIndex (option.id)}{optionIndex > 0
+                                                  ? ', '
+                                                  : ''}{option.label || 'Option'}{#if option.price.trim()} ({formatAddonPrice(option.price)}){/if}{/each}
+                                            </span>
+                                          {:else}
+                                            <ul class="menu-print-modifier-options-list">
+                                              {#each group.options as option (option.id)}
+                                                <li class="menu-print-modifier-option">
+                                                  <span class="menu-print-modifier-option-label">{option.label || 'Option'}</span>
+                                                  {#if option.price.trim()}
+                                                    <span class="menu-print-modifier-price">{formatAddonPrice(option.price)}</span>
+                                                  {/if}
+                                                </li>
+                                              {/each}
+                                            </ul>
+                                          {/if}
+                                        </div>
+                                      {/if}
+                                    {/each}
+                                  </div>
                                 {/if}
                               </div>
                             </div>
