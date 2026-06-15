@@ -358,17 +358,48 @@ textarea {
   line-height: 1.25;
 }
 
+.menu-print-logo {
+  display: block;
+  transform-origin: center;
+}
+
+.menu-print-item-content-with-photo {
+  align-items: start;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(3.75rem, 4.5rem) minmax(0, 1fr);
+}
+
+.menu-print-item-photo {
+  border-radius: 0.35rem;
+  break-inside: avoid;
+  display: block;
+  object-fit: cover;
+  page-break-inside: avoid;
+}
+
+.menu-print-item-photo-thumbnail {
+  aspect-ratio: 1;
+  width: 4.5rem;
+}
+
+.menu-print-item-photo-banner {
+  aspect-ratio: 4 / 1.35;
+  margin-bottom: 0.75rem;
+  width: 100%;
+}
+
 .menu-print-preview h5,
-.menu-print-preview .menu-print-item > div > p {
+.menu-print-preview .menu-print-item-price {
   font-size: var(--menu-item-name-size, 1rem);
   line-height: var(--menu-item-line-height, 1.35);
 }
 
-.menu-print-preview .menu-print-item > div > p {
+.menu-print-preview .menu-print-item-price {
   color: var(--menu-text, #172033);
 }
 
-.menu-print-preview .menu-print-item > p,
+.menu-print-preview .menu-print-item-description,
 .menu-print-preview .menu-print-empty-section,
 .menu-print-preview .menu-print-empty-state,
 .menu-print-preview .menu-print-footer {

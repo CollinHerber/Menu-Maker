@@ -35,6 +35,8 @@
   } from '@lucide/svelte';
 
   type LogoPlacement = 'above-eyebrow' | 'below-eyebrow' | 'left-eyebrow' | 'right-eyebrow';
+  type ImageFit = 'contain' | 'cover';
+  type SectionImageLayout = 'none' | 'thumbnail' | 'banner';
   type SectionColumnSpan = 1 | 2;
   type StylePresetId = 'simple' | 'elegant' | 'professional' | 'hometown';
   type PrintPageSize = 'letter' | 'a4';
@@ -105,13 +107,29 @@
     name: string;
     description: string;
     price: string;
+    imageDataUrl: string;
+    imageName: string;
+    imageAlt: string;
   };
 
   type MenuSection = {
     id: string;
     name: string;
     columnSpan: SectionColumnSpan;
+    imageLayout: SectionImageLayout;
     items: MenuItem[];
+  };
+
+  type MenuVariant = {
+    id: string;
+    name: string;
+    subtitle: string;
+    eyebrow: string;
+    footerNote: string;
+    disclaimer: string;
+    qrCodeUrl: string;
+    qrCodeLabel: string;
+    sections: MenuSection[];
   };
 
   type MenuDraft = {
@@ -132,7 +150,14 @@
     designSettings: DesignSettings;
     logoDataUrl: string;
     logoName: string;
+    logoAlt: string;
+    logoFit: ImageFit;
+    logoScale: number;
+    logoOffsetX: number;
+    logoOffsetY: number;
     logoPlacement: LogoPlacement;
+    activeVariantId: string;
+    variants: MenuVariant[];
     sections: MenuSection[];
   };
 
@@ -143,11 +168,13 @@
     draft: MenuDraft;
   };
 
-  type TemplateMenuItem = Omit<MenuItem, 'id'>;
+  type TemplateMenuItem = Pick<MenuItem, 'name' | 'description' | 'price'> &
+    Partial<Pick<MenuItem, 'imageDataUrl' | 'imageName' | 'imageAlt'>>;
 
   type TemplateSection = {
     name: string;
     columnSpan?: SectionColumnSpan;
+    imageLayout?: SectionImageLayout;
     items: TemplateMenuItem[];
   };
 
@@ -187,7 +214,7 @@
     itemCount: number;
   };
 
-  type QuickAddItemDraft = Omit<MenuItem, 'id'>;
+  type QuickAddItemDraft = Pick<MenuItem, 'name' | 'description' | 'price'>;
 
   type DraftHistoryEntry = {
     id: string;
@@ -204,6 +231,7 @@
     sectionId: string;
     name: string;
     columnSpan: SectionColumnSpan;
+    imageLayout: SectionImageLayout;
     items: MenuItem[];
     isContinuation: boolean;
   };
@@ -223,11 +251,21 @@
     pageWidth: number;
   };
 
+  type PreparedImageUpload = {
+    dataUrl: string;
+    fileName: string;
+    finalBytes: number;
+    originalBytes: number;
+    resized: boolean;
+  };
+
   const storageKey = 'menumaker:draft:v1';
   const historyStorageKey = 'menumaker:draft-history:v1';
   const draftFileSchemaVersion = 1;
   const maxUndoSnapshots = 75;
   const maxDraftHistoryEntries = 15;
+  const maxImageUploadDimension = 1400;
+  const largeImageUploadThreshold = 650_000;
 
   const defaultPrintSettings = (): PrintSettings => ({
     pageSize: 'letter',
@@ -277,6 +315,12 @@
   const printMarginOptions: PrintMargin[] = ['compact', 'standard', 'wide'];
   const printDensityOptions: PrintDensity[] = ['comfortable', 'compact'];
   const printColumnOptions: SectionColumnSpan[] = [1, 2];
+  const logoFitOptions: ImageFit[] = ['contain', 'cover'];
+  const sectionImageLayoutOptions: Array<{ label: string; value: SectionImageLayout }> = [
+    { label: 'None', value: 'none' },
+    { label: 'Thumb', value: 'thumbnail' },
+    { label: 'Banner', value: 'banner' },
+  ];
   const previewPixelsPerInch = 72;
   const editorPanels: Array<{ id: EditorPanelId; label: string; description: string }> = [
     { id: 'menu', label: 'Menu', description: 'Name, subtitle, and logo' },
@@ -606,6 +650,9 @@
     name: '',
     description: '',
     price: '',
+    imageDataUrl: '',
+    imageName: '',
+    imageAlt: '',
     ...overrides,
   });
 
@@ -616,6 +663,7 @@
     id: createId(),
     name,
     columnSpan,
+    imageLayout: 'none',
     items: [],
   });
 
@@ -626,14 +674,80 @@
       name: appendCopyLabel ? copyName(item.name, 'Untitled item') : item.name,
       description: item.description,
       price: item.price,
+      imageDataUrl: item.imageDataUrl,
+      imageName: item.imageName,
+      imageAlt: item.imageAlt,
     });
 
   const cloneMenuSection = (section: MenuSection): MenuSection => ({
     id: createId(),
     name: copyName(section.name, 'Untitled section'),
     columnSpan: section.columnSpan,
+    imageLayout: section.imageLayout,
     items: section.items.map((item) => cloneMenuItem(item)),
   });
+
+  const copyMenuItem = (item: MenuItem, preserveId = true): MenuItem => ({
+    id: preserveId ? item.id || createId() : createId(),
+    name: item.name,
+    description: item.description,
+    price: item.price,
+    imageDataUrl: item.imageDataUrl,
+    imageName: item.imageName,
+    imageAlt: item.imageAlt,
+  });
+
+  const copyMenuSection = (section: MenuSection, preserveId = true): MenuSection => ({
+    id: preserveId ? section.id || createId() : createId(),
+    name: section.name,
+    columnSpan: section.columnSpan,
+    imageLayout: section.imageLayout,
+    items: section.items.map((item) => copyMenuItem(item, preserveId)),
+  });
+
+  const createVariantFromMenu = (draft: MenuDraft, id = draft.activeVariantId || createId()): MenuVariant => ({
+    id,
+    name: draft.name,
+    subtitle: draft.subtitle,
+    eyebrow: draft.eyebrow,
+    footerNote: draft.footerNote,
+    disclaimer: draft.disclaimer,
+    qrCodeUrl: draft.qrCodeUrl,
+    qrCodeLabel: draft.qrCodeLabel,
+    sections: draft.sections.map((section) => copyMenuSection(section)),
+  });
+
+  const applyVariantToDraft = (draft: MenuDraft, variant: MenuVariant) => {
+    draft.activeVariantId = variant.id;
+    draft.name = variant.name;
+    draft.subtitle = variant.subtitle;
+    draft.eyebrow = variant.eyebrow;
+    draft.footerNote = variant.footerNote;
+    draft.disclaimer = variant.disclaimer;
+    draft.qrCodeUrl = variant.qrCodeUrl;
+    draft.qrCodeLabel = variant.qrCodeLabel;
+    draft.sections = variant.sections.map((section) => copyMenuSection(section));
+
+    return draft;
+  };
+
+  const syncActiveVariantIntoDraft = (draft: MenuDraft) => {
+    const activeVariantId = draft.activeVariantId || draft.variants[0]?.id || createId();
+    const activeVariant = createVariantFromMenu(draft, activeVariantId);
+    const variants = draft.variants.length > 0 ? draft.variants.map((variant) => ({ ...variant })) : [activeVariant];
+    const activeVariantIndex = variants.findIndex((variant) => variant.id === activeVariantId);
+
+    if (activeVariantIndex >= 0) {
+      variants[activeVariantIndex] = activeVariant;
+    } else {
+      variants.unshift(activeVariant);
+    }
+
+    draft.activeVariantId = activeVariantId;
+    draft.variants = variants;
+
+    return draft;
+  };
 
   function parseQuickAddItemLine(line: string): QuickAddItemDraft | null {
     const parts = line
@@ -660,30 +774,40 @@
     };
   }
 
-  const starterMenu = (): MenuDraft => ({
-    name: 'Main Street Grill',
-    subtitle: 'Small town favorites served fresh',
-    eyebrow: "Today's Menu",
-    address: '123 Main Street, Yourtown, USA',
-    phone: '(555) 123-4567',
-    website: 'mainstreetgrill.example',
-    hours: 'Open daily 11 AM - 9 PM',
-    socialHandle: '@mainstreetgrill',
-    footerNote: 'Ask about our daily specials and catering options.',
-    disclaimer: 'Consuming raw or undercooked meats may increase your risk of foodborne illness.',
-    qrCodeUrl: 'https://example.com/order',
-    qrCodeLabel: 'Scan for online ordering',
-    stylePresetId: 'simple',
-    printSettings: defaultPrintSettings(),
-    designSettings: defaultDesignSettings(),
-    logoDataUrl: '',
-    logoName: '',
-    logoPlacement: 'above-eyebrow',
-    sections: [
+  const starterMenu = (): MenuDraft => {
+    const variantId = createId();
+    const draft: MenuDraft = {
+      name: 'Main Street Grill',
+      subtitle: 'Small town favorites served fresh',
+      eyebrow: "Today's Menu",
+      address: '123 Main Street, Yourtown, USA',
+      phone: '(555) 123-4567',
+      website: 'mainstreetgrill.example',
+      hours: 'Open daily 11 AM - 9 PM',
+      socialHandle: '@mainstreetgrill',
+      footerNote: 'Ask about our daily specials and catering options.',
+      disclaimer: 'Consuming raw or undercooked meats may increase your risk of foodborne illness.',
+      qrCodeUrl: 'https://example.com/order',
+      qrCodeLabel: 'Scan for online ordering',
+      stylePresetId: 'simple',
+      printSettings: defaultPrintSettings(),
+      designSettings: defaultDesignSettings(),
+      logoDataUrl: '',
+      logoName: '',
+      logoAlt: '',
+      logoFit: 'contain',
+      logoScale: 100,
+      logoOffsetX: 0,
+      logoOffsetY: 0,
+      logoPlacement: 'above-eyebrow',
+      activeVariantId: variantId,
+      variants: [],
+      sections: [
       {
         id: createId(),
         name: 'Appetizers',
         columnSpan: 2,
+        imageLayout: 'none',
         items: [
           createItem({
             name: 'Onion Rings',
@@ -706,6 +830,7 @@
         id: createId(),
         name: 'Burgers',
         columnSpan: 1,
+        imageLayout: 'none',
         items: [
           createItem({
             name: 'Classic Beef Burger',
@@ -728,6 +853,7 @@
         id: createId(),
         name: 'Sandwiches & Wraps',
         columnSpan: 1,
+        imageLayout: 'none',
         items: [
           createItem({
             name: 'Crispy Chicken Wrap',
@@ -750,6 +876,7 @@
         id: createId(),
         name: 'Pizza',
         columnSpan: 2,
+        imageLayout: 'none',
         items: [
           createItem({
             name: 'Cheese Pizza',
@@ -772,6 +899,7 @@
         id: createId(),
         name: 'Entrees',
         columnSpan: 2,
+        imageLayout: 'none',
         items: [
           createItem({
             name: 'Chicken Fried Steak',
@@ -790,8 +918,13 @@
           }),
         ],
       },
-    ],
-  });
+      ],
+    };
+
+    draft.variants = [createVariantFromMenu(draft, variantId)];
+
+    return draft;
+  };
 
   const menuTemplates: MenuTemplate[] = [
     {
@@ -1354,6 +1487,13 @@
     return 'above-eyebrow';
   };
 
+  const normalizeImageFit = (value: unknown): ImageFit => (value === 'cover' ? 'cover' : 'contain');
+
+  const normalizeSectionImageLayout = (value: unknown): SectionImageLayout => {
+    if (value === 'thumbnail' || value === 'banner') return value;
+    return 'none';
+  };
+
   const normalizeStylePresetId = (presetId: unknown): StylePresetId => {
     if (stylePresets.some((preset) => preset.id === presetId)) return presetId as StylePresetId;
     return 'simple';
@@ -1482,6 +1622,86 @@
       .replace(/^-+|-+$/g, '')
       .slice(0, 60);
 
+  const estimateDataUrlBytes = (dataUrl: string) => Math.round((dataUrl.length * 3) / 4);
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.addEventListener('load', () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Could not read that image.'));
+        }
+      });
+      reader.addEventListener('error', () => reject(new Error('Could not read that image.')));
+      reader.readAsDataURL(file);
+    });
+
+  const loadImageForUpload = (dataUrl: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new window.Image();
+
+      image.addEventListener('load', () => resolve(image), { once: true });
+      image.addEventListener('error', () => reject(new Error('Could not load that image.')), { once: true });
+      image.src = dataUrl;
+    });
+
+  const prepareImageUpload = async (file: File): Promise<PreparedImageUpload> => {
+    const dataUrl = await readFileAsDataUrl(file);
+    const image = await loadImageForUpload(dataUrl);
+    const largestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = largestSide > maxImageUploadDimension ? maxImageUploadDimension / largestSide : 1;
+    const shouldOptimize = scale < 1 || file.size > largeImageUploadThreshold;
+
+    if (!shouldOptimize) {
+      return {
+        dataUrl,
+        fileName: file.name,
+        finalBytes: file.size,
+        originalBytes: file.size,
+        resized: false,
+      };
+    }
+
+    const canvas = document.createElement('canvas');
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      return {
+        dataUrl,
+        fileName: file.name,
+        finalBytes: file.size,
+        originalBytes: file.size,
+        resized: false,
+      };
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.86);
+
+    return {
+      dataUrl: optimizedDataUrl,
+      fileName: file.name,
+      finalBytes: estimateDataUrlBytes(optimizedDataUrl),
+      originalBytes: file.size,
+      resized: true,
+    };
+  };
+
+  const imageUploadStatusMessage = (image: PreparedImageUpload) =>
+    image.resized
+      ? `Optimized ${image.fileName} so the draft stays lightweight.`
+      : `Uploaded ${image.fileName}.`;
+
   const optionalDetailFields = [
     'address',
     'phone',
@@ -1494,32 +1714,47 @@
     'qrCodeLabel',
   ] as const satisfies readonly (keyof MenuDraft)[];
 
-  const createDraftFromTemplate = (template: MenuTemplate): MenuDraft => ({
-    name: template.defaultName,
-    subtitle: template.subtitle,
-    eyebrow: template.eyebrow,
-    address: '',
-    phone: '',
-    website: '',
-    hours: '',
-    socialHandle: '',
-    footerNote: template.footerNote ?? '',
-    disclaimer: '',
-    qrCodeUrl: '',
-    qrCodeLabel: '',
-    stylePresetId: 'simple',
-    printSettings: defaultPrintSettings(),
-    designSettings: defaultDesignSettings(),
-    logoDataUrl: '',
-    logoName: '',
-    logoPlacement: 'above-eyebrow',
-    sections: template.sections.map((section) => ({
-      id: createId(),
-      name: section.name,
-      columnSpan: section.columnSpan ?? defaultSectionColumnSpan(section.name),
-      items: section.items.map((item) => createItem(item)),
-    })),
-  });
+  const createDraftFromTemplate = (template: MenuTemplate): MenuDraft => {
+    const variantId = createId();
+    const draft: MenuDraft = {
+      name: template.defaultName,
+      subtitle: template.subtitle,
+      eyebrow: template.eyebrow,
+      address: '',
+      phone: '',
+      website: '',
+      hours: '',
+      socialHandle: '',
+      footerNote: template.footerNote ?? '',
+      disclaimer: '',
+      qrCodeUrl: '',
+      qrCodeLabel: '',
+      stylePresetId: 'simple',
+      printSettings: defaultPrintSettings(),
+      designSettings: defaultDesignSettings(),
+      logoDataUrl: '',
+      logoName: '',
+      logoAlt: '',
+      logoFit: 'contain',
+      logoScale: 100,
+      logoOffsetX: 0,
+      logoOffsetY: 0,
+      logoPlacement: 'above-eyebrow',
+      activeVariantId: variantId,
+      variants: [],
+      sections: template.sections.map((section) => ({
+        id: createId(),
+        name: section.name,
+        columnSpan: section.columnSpan ?? defaultSectionColumnSpan(section.name),
+        imageLayout: section.imageLayout ?? 'none',
+        items: section.items.map((item) => createItem(item)),
+      })),
+    };
+
+    draft.variants = [createVariantFromMenu(draft, variantId)];
+
+    return draft;
+  };
 
   const templateItemCount = (template: MenuTemplate) =>
     template.sections.reduce((count, section) => count + section.items.length, 0);
@@ -1660,6 +1895,9 @@
       name: normalizeTextField(value.name),
       description: normalizeTextField(value.description),
       price: normalizeTextField(value.price),
+      imageDataUrl: normalizeTextField(value.imageDataUrl),
+      imageName: normalizeTextField(value.imageName),
+      imageAlt: normalizeTextField(value.imageAlt),
     };
   };
 
@@ -1678,7 +1916,30 @@
       id: normalizeTextField(value.id) || createId(),
       name,
       columnSpan: normalizeSectionColumnSpan(value.columnSpan, name),
+      imageLayout: normalizeSectionImageLayout(value.imageLayout),
       items: value.items.map((item, itemIndex) => normalizeImportedItem(item, itemIndex, sectionIndex)),
+    };
+  };
+
+  const normalizeImportedVariant = (value: unknown, variantIndex: number): MenuVariant => {
+    if (!isRecord(value)) {
+      throw new Error(`Menu variant ${variantIndex + 1} is invalid.`);
+    }
+
+    if (!Array.isArray(value.sections) || value.sections.length === 0) {
+      throw new Error(`Menu variant ${variantIndex + 1} must include at least one section.`);
+    }
+
+    return {
+      id: normalizeTextField(value.id) || createId(),
+      name: normalizeTextField(value.name) || `Menu ${variantIndex + 1}`,
+      subtitle: normalizeTextField(value.subtitle),
+      eyebrow: normalizeTextField(value.eyebrow),
+      footerNote: normalizeTextField(value.footerNote),
+      disclaimer: normalizeTextField(value.disclaimer),
+      qrCodeUrl: normalizeTextField(value.qrCodeUrl),
+      qrCodeLabel: normalizeTextField(value.qrCodeLabel),
+      sections: value.sections.map(normalizeImportedSection),
     };
   };
 
@@ -1687,7 +1948,13 @@
       throw new Error('Draft data is missing or invalid.');
     }
 
-    if (!Array.isArray(value.sections) || value.sections.length === 0) {
+    const topLevelSections = Array.isArray(value.sections) && value.sections.length > 0 ? value.sections : null;
+    const hasTopLevelSections = topLevelSections !== null;
+    const variantValues = Array.isArray(value.variants) ? value.variants : [];
+    const normalizedVariants = variantValues.map(normalizeImportedVariant);
+    const fallbackSections = topLevelSections ?? normalizedVariants[0]?.sections;
+
+    if (!Array.isArray(fallbackSections) || fallbackSections.length === 0) {
       throw new Error('Draft must include at least one section.');
     }
 
@@ -1698,18 +1965,38 @@
       eyebrow: normalizeTextField(value.eyebrow),
       logoDataUrl: normalizeTextField(value.logoDataUrl),
       logoName: normalizeTextField(value.logoName),
+      logoAlt: normalizeTextField(value.logoAlt),
+      logoFit: normalizeImageFit(value.logoFit),
+      logoScale: normalizeNumericSetting(value.logoScale, 100, 40, 200),
+      logoOffsetX: normalizeNumericSetting(value.logoOffsetX, 0, -50, 50),
+      logoOffsetY: normalizeNumericSetting(value.logoOffsetY, 0, -50, 50),
       logoPlacement: normalizeLogoPlacement(value.logoPlacement),
+      activeVariantId: normalizeTextField(value.activeVariantId),
+      variants: normalizedVariants,
       stylePresetId: normalizeStylePresetId(value.stylePresetId),
       printSettings: normalizePrintSettings(value.printSettings),
       designSettings: normalizeDesignSettings(value.designSettings),
-      sections: value.sections.map(normalizeImportedSection),
+      sections: topLevelSections ? topLevelSections.map(normalizeImportedSection) : normalizedVariants[0].sections,
     };
 
     optionalDetailFields.forEach((field) => {
       importedMenu[field] = normalizeTextField(value[field]);
     });
 
-    return importedMenu;
+    if (importedMenu.variants.length === 0) {
+      importedMenu.activeVariantId = importedMenu.activeVariantId || createId();
+      importedMenu.variants = [createVariantFromMenu(importedMenu, importedMenu.activeVariantId)];
+    } else if (!importedMenu.variants.some((variant) => variant.id === importedMenu.activeVariantId)) {
+      importedMenu.activeVariantId = importedMenu.variants[0].id;
+      applyVariantToDraft(importedMenu, importedMenu.variants[0]);
+    }
+
+    if (!hasTopLevelSections) {
+      const activeVariant = importedMenu.variants.find((variant) => variant.id === importedMenu.activeVariantId);
+      return activeVariant ? applyVariantToDraft(importedMenu, activeVariant) : importedMenu;
+    }
+
+    return syncActiveVariantIntoDraft(importedMenu);
   };
 
   const parseDraftFile = (value: unknown): MenuDraft => {
@@ -1825,24 +2112,7 @@
       const saved = localStorage.getItem(storageKey);
       if (!saved) return starterMenu();
 
-      const parsedMenu = JSON.parse(saved) as Partial<MenuDraft> & { logoPlacement?: unknown };
-      const loadedMenu: MenuDraft = {
-        ...starterMenu(),
-        ...parsedMenu,
-      };
-      loadedMenu.logoPlacement = normalizeLogoPlacement(parsedMenu.logoPlacement);
-      loadedMenu.stylePresetId = normalizeStylePresetId(parsedMenu.stylePresetId);
-      loadedMenu.printSettings = normalizePrintSettings(parsedMenu.printSettings);
-      loadedMenu.designSettings = normalizeDesignSettings(parsedMenu.designSettings);
-      optionalDetailFields.forEach((field) => {
-        loadedMenu[field] = normalizeTextField(parsedMenu[field]);
-      });
-      loadedMenu.sections = loadedMenu.sections.map((section) => ({
-        ...section,
-        columnSpan: normalizeSectionColumnSpan(section.columnSpan, section.name),
-      }));
-
-      return loadedMenu;
+      return normalizeImportedDraft(JSON.parse(saved));
     } catch {
       return starterMenu();
     }
@@ -1908,6 +2178,11 @@
   let lastMenuSnapshot = initialMenuSnapshot;
   let applyingHistorySnapshot = false;
 
+  const createSerializableMenuDraft = (draft: MenuDraft = menu) =>
+    syncActiveVariantIntoDraft($state.snapshot(draft) as MenuDraft);
+
+  const createMenuSnapshot = (draft: MenuDraft = menu) => JSON.stringify(createSerializableMenuDraft(draft));
+
   let selectedSection = $derived(
     menu.sections.find((section) => section.id === selectedSectionId) ?? menu.sections[0],
   );
@@ -1934,6 +2209,11 @@
   let canCreateSection = $derived(newSectionName.trim().length > 0);
   let hasTopText = $derived(menu.eyebrow.trim().length > 0);
   let hasLogo = $derived(menu.logoDataUrl.length > 0);
+  let logoImageStyle = $derived(
+    `object-fit: ${menu.logoFit}; object-position: ${50 + menu.logoOffsetX}% ${
+      50 + menu.logoOffsetY
+    }%; transform: scale(${menu.logoScale / 100});`,
+  );
   let hasHeaderTopContent = $derived(hasTopText || hasLogo);
   let hasRestaurantDetails = $derived(
     menu.address.trim().length > 0 ||
@@ -2203,7 +2483,7 @@
   };
 
   $effect(() => {
-    const snapshot = JSON.stringify(menu);
+    const snapshot = createMenuSnapshot();
 
     if (snapshot === lastMenuSnapshot) {
       saveMenuSnapshot(snapshot);
@@ -2269,21 +2549,24 @@
     wizardModalOpen = false;
   };
 
-  const handleWizardLogoUpload = (event: Event) => {
+  const handleWizardLogoUpload = async (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
 
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      if (typeof reader.result !== 'string') return;
-
-      wizardLogoDataUrl = reader.result;
-      wizardLogoName = file.name;
+    try {
+      const upload = await prepareImageUpload(file);
+      wizardLogoDataUrl = upload.dataUrl;
+      wizardLogoName = upload.fileName;
+      draftFileError = '';
+      draftFileStatus = imageUploadStatusMessage(upload);
+    } catch {
+      draftFileStatus = '';
+      draftFileError = 'Could not upload that logo image.';
+    } finally {
       input.value = '';
-    });
-    reader.readAsDataURL(file);
+    }
   };
 
   const removeWizardLogo = () => {
@@ -2300,6 +2583,7 @@
     wizardDraft.stylePresetId = wizardStylePresetId;
     wizardDraft.logoDataUrl = wizardLogoDataUrl;
     wizardDraft.logoName = wizardLogoName;
+    wizardDraft.logoAlt = wizardLogoName.replace(/\.[^.]+$/, '');
     wizardDraft.logoPlacement = wizardLogoDataUrl ? 'above-eyebrow' : wizardDraft.logoPlacement;
 
     menu = wizardDraft;
@@ -2333,7 +2617,7 @@
   const undoMenuChange = () => {
     if (!canUndo) return;
 
-    const currentSnapshot = JSON.stringify(menu);
+    const currentSnapshot = createMenuSnapshot();
     const previousSnapshot = undoSnapshots.at(-1);
 
     if (!previousSnapshot) return;
@@ -2346,7 +2630,7 @@
   const redoMenuChange = () => {
     if (!canRedo) return;
 
-    const currentSnapshot = JSON.stringify(menu);
+    const currentSnapshot = createMenuSnapshot();
     const nextSnapshot = redoSnapshots[0];
 
     if (!nextSnapshot) return;
@@ -2361,7 +2645,7 @@
 
     if (!entry) return;
 
-    const currentSnapshot = JSON.stringify(menu);
+    const currentSnapshot = createMenuSnapshot();
 
     if (currentSnapshot !== entry.snapshot) {
       undoSnapshots = [...undoSnapshots.slice(-(maxUndoSnapshots - 1)), currentSnapshot];
@@ -2409,6 +2693,84 @@
     activeEditorPanel = 'sections';
   };
 
+  const resetEditorForActiveVariant = (statusMessage: string) => {
+    selectedSectionId = menu.sections[0]?.id ?? '';
+    selectedItemIds = [];
+    quickAddItemsText = '';
+    resetSectionDrag();
+    resetItemDrag();
+    draftFileError = '';
+    draftFileStatus = statusMessage;
+  };
+
+  const selectVariant = (variantId: string) => {
+    if (variantId === menu.activeVariantId) return;
+
+    const syncedDraft = createSerializableMenuDraft();
+    const nextVariant = syncedDraft.variants.find((variant) => variant.id === variantId);
+
+    if (!nextVariant) return;
+
+    menu = applyVariantToDraft(syncedDraft, nextVariant);
+    resetEditorForActiveVariant(`Switched to ${nextVariant.name || 'menu variant'}.`);
+  };
+
+  const addVariant = () => {
+    const syncedDraft = createSerializableMenuDraft();
+    const variantNumber = syncedDraft.variants.length + 1;
+    const variant: MenuVariant = {
+      id: createId(),
+      name: `Menu ${variantNumber}`,
+      subtitle: syncedDraft.subtitle,
+      eyebrow: syncedDraft.eyebrow,
+      footerNote: syncedDraft.footerNote,
+      disclaimer: syncedDraft.disclaimer,
+      qrCodeUrl: syncedDraft.qrCodeUrl,
+      qrCodeLabel: syncedDraft.qrCodeLabel,
+      sections: [createSection('New Section')],
+    };
+
+    syncedDraft.variants = [...syncedDraft.variants, variant];
+    menu = applyVariantToDraft(syncedDraft, variant);
+    activeEditorPanel = 'sections';
+    resetEditorForActiveVariant(`Added ${variant.name}.`);
+  };
+
+  const duplicateActiveVariant = () => {
+    const syncedDraft = createSerializableMenuDraft();
+    const activeVariant =
+      syncedDraft.variants.find((variant) => variant.id === syncedDraft.activeVariantId) ??
+      createVariantFromMenu(syncedDraft);
+    const duplicatedVariant: MenuVariant = {
+      ...activeVariant,
+      id: createId(),
+      name: copyName(activeVariant.name, 'Menu'),
+      sections: activeVariant.sections.map((section) => copyMenuSection(section, false)),
+    };
+
+    syncedDraft.variants = [...syncedDraft.variants, duplicatedVariant];
+    menu = applyVariantToDraft(syncedDraft, duplicatedVariant);
+    activeEditorPanel = 'sections';
+    resetEditorForActiveVariant(`Duplicated ${activeVariant.name || 'menu variant'}.`);
+  };
+
+  const removeActiveVariant = () => {
+    const syncedDraft = createSerializableMenuDraft();
+
+    if (syncedDraft.variants.length <= 1) return;
+
+    const activeVariantIndex = Math.max(
+      0,
+      syncedDraft.variants.findIndex((variant) => variant.id === syncedDraft.activeVariantId),
+    );
+    const variants = syncedDraft.variants.filter((variant) => variant.id !== syncedDraft.activeVariantId);
+    const nextVariant = variants[Math.max(0, activeVariantIndex - 1)] ?? variants[0];
+
+    syncedDraft.variants = variants;
+    menu = applyVariantToDraft(syncedDraft, nextVariant);
+    resetEditorForActiveVariant(`Removed variant and switched to ${nextVariant.name || 'menu variant'}.`);
+  };
+
   const estimateWrappedLineCount = (value: string, charactersPerLine: number) => {
     const trimmedValue = value.trim();
     if (!trimmedValue) return 0;
@@ -2427,20 +2789,34 @@
     if (menu.subtitle.trim()) height += Math.round(descriptionFontSize * bodyLineHeight + 10);
     if (hasRestaurantDetails) height += Math.round(detailFontSize * bodyLineHeight * 3.25);
     if (hasLogo && (menu.logoPlacement === 'above-eyebrow' || menu.logoPlacement === 'below-eyebrow')) {
-      height += 86;
+      height += Math.round(86 * (menu.logoScale / 100));
     }
 
     return height;
   };
 
-  const estimatePreviewItemHeight = (item: MenuItem, sectionSpan: SectionColumnSpan) => {
+  const estimatePreviewItemHeight = (
+    item: MenuItem,
+    sectionSpan: SectionColumnSpan,
+    imageLayout: SectionImageLayout,
+  ) => {
     const isNarrowColumn = menu.printSettings.columns === 2 && sectionSpan === 1;
     const nameLines = estimateWrappedLineCount(item.name || 'Untitled item', isNarrowColumn ? 22 : 46);
     const descriptionLines = estimateWrappedLineCount(item.description, isNarrowColumn ? 34 : 78);
     const nameLineHeight = itemNameFontSize * itemLineHeight;
     const descriptionLineHeight = descriptionFontSize * bodyLineHeight;
+    let imageHeight = 0;
 
-    return nameLines * nameLineHeight + (descriptionLines > 0 ? descriptionLines * descriptionLineHeight + 8 : 0);
+    if (item.imageDataUrl && imageLayout === 'thumbnail') {
+      imageHeight = 74;
+    } else if (item.imageDataUrl && imageLayout === 'banner') {
+      imageHeight = isNarrowColumn ? 104 : 126;
+    }
+
+    const textHeight =
+      nameLines * nameLineHeight + (descriptionLines > 0 ? descriptionLines * descriptionLineHeight + 8 : 0);
+
+    return imageLayout === 'thumbnail' ? Math.max(textHeight, imageHeight) : textHeight + imageHeight;
   };
 
   const estimatePreviewSectionHeight = (section: PreviewSectionChunk) => {
@@ -2454,7 +2830,9 @@
       headingHeight +
       section.items.reduce(
         (height, item, itemIndex) =>
-          height + estimatePreviewItemHeight(item, sectionSpan) + (itemIndex === 0 ? 0 : itemGap),
+          height +
+          estimatePreviewItemHeight(item, sectionSpan, section.imageLayout) +
+          (itemIndex === 0 ? 0 : itemGap),
         0,
       )
     );
@@ -2517,6 +2895,7 @@
     sectionId: section.id,
     name: section.name,
     columnSpan: section.columnSpan,
+    imageLayout: section.imageLayout,
     items,
     isContinuation: chunkIndex > 0,
   });
@@ -2588,6 +2967,7 @@
               id: chunk.sectionId,
               name: chunk.name,
               columnSpan: chunk.columnSpan,
+              imageLayout: chunk.imageLayout,
               items: chunk.items,
             },
             nextItems,
@@ -2606,11 +2986,12 @@
         page.sections.push(
           createPreviewSectionChunk(
             {
-              id: chunk.sectionId,
-              name: chunk.name,
-              columnSpan: chunk.columnSpan,
-              items: chunk.items,
-            },
+            id: chunk.sectionId,
+            name: chunk.name,
+            columnSpan: chunk.columnSpan,
+            imageLayout: chunk.imageLayout,
+            items: chunk.items,
+          },
             chunkItems,
             chunkIndex,
           ),
@@ -3192,26 +3573,62 @@
     resetItemDrag();
   };
 
-  const handleLogoUpload = (event: Event) => {
+  const handleLogoUpload = async (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
 
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      if (typeof reader.result !== 'string') return;
-
-      menu.logoDataUrl = reader.result;
-      menu.logoName = file.name;
+    try {
+      const upload = await prepareImageUpload(file);
+      menu.logoDataUrl = upload.dataUrl;
+      menu.logoName = upload.fileName;
+      menu.logoAlt = menu.logoAlt || upload.fileName.replace(/\.[^.]+$/, '');
+      draftFileError = '';
+      draftFileStatus = imageUploadStatusMessage(upload);
+    } catch {
+      draftFileStatus = '';
+      draftFileError = 'Could not upload that logo image.';
+    } finally {
       input.value = '';
-    });
-    reader.readAsDataURL(file);
+    }
   };
 
   const removeLogo = () => {
     menu.logoDataUrl = '';
     menu.logoName = '';
+    menu.logoAlt = '';
+    menu.logoFit = 'contain';
+    menu.logoScale = 100;
+    menu.logoOffsetX = 0;
+    menu.logoOffsetY = 0;
+  };
+
+  const handleItemImageUpload = async (event: Event, item: MenuItem) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) return;
+
+    try {
+      const upload = await prepareImageUpload(file);
+      item.imageDataUrl = upload.dataUrl;
+      item.imageName = upload.fileName;
+      item.imageAlt = item.imageAlt || item.name || upload.fileName.replace(/\.[^.]+$/, '');
+      draftFileError = '';
+      draftFileStatus = imageUploadStatusMessage(upload);
+    } catch {
+      draftFileStatus = '';
+      draftFileError = 'Could not upload that item photo.';
+    } finally {
+      input.value = '';
+    }
+  };
+
+  const removeItemImage = (item: MenuItem) => {
+    item.imageDataUrl = '';
+    item.imageName = '';
+    item.imageAlt = '';
   };
 
   const downloadBlob = (blob: Blob, fileName: string) => {
@@ -3233,7 +3650,7 @@
       app: 'MenuMaker',
       schemaVersion: draftFileSchemaVersion,
       exportedAt: new Date().toISOString(),
-      draft: $state.snapshot(menu),
+      draft: createSerializableMenuDraft(),
     };
     const serializedDraft = JSON.stringify(draftFile, null, 2);
     const blob = new Blob([serializedDraft], { type: 'application/json' });
@@ -4333,6 +4750,61 @@
           </div>
         </div>
 
+        <div class="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 class="text-base font-semibold text-slate-950">Menu variants</h3>
+              <p class="mt-1 text-sm leading-6 text-slate-600">
+                Make breakfast, lunch, dinner, drinks, or catering menus from one shared restaurant profile.
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <Button color="light" onclick={addVariant}>
+                <Plus class="mr-2 h-4 w-4" />
+                Add
+              </Button>
+              <Button color="light" onclick={duplicateActiveVariant}>
+                <Copy class="mr-2 h-4 w-4" />
+                Duplicate
+              </Button>
+              <Button color="red" disabled={menu.variants.length <= 1} onclick={removeActiveVariant}>
+                <Trash2 class="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-2">
+            {#each menu.variants as variant, variantIndex (variant.id)}
+              <button
+                aria-pressed={variant.id === menu.activeVariantId}
+                class={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-4 focus:ring-brand-200 ${
+                  variant.id === menu.activeVariantId
+                    ? 'border-brand-600 bg-white text-brand-950 shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950'
+                }`}
+                type="button"
+                onclick={() => selectVariant(variant.id)}
+              >
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-semibold">
+                    {variant.id === menu.activeVariantId ? menu.name || 'Untitled menu' : variant.name || 'Untitled menu'}
+                  </span>
+                  <span class="mt-0.5 block text-xs text-slate-500">
+                    {variant.id === menu.activeVariantId
+                      ? `${menu.sections.length} section${menu.sections.length === 1 ? '' : 's'}`
+                      : `${variant.sections.length} section${variant.sections.length === 1 ? '' : 's'}`}
+                  </span>
+                </span>
+                <span class="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">
+                  {variantIndex + 1}
+                </span>
+              </button>
+            {/each}
+          </div>
+        </div>
+
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block sm:col-span-2">
             <span class="text-sm font-medium text-slate-700">Small top text</span>
@@ -4374,76 +4846,160 @@
 
             {#if menu.logoDataUrl}
               <div class="mt-4 grid gap-4 md:grid-cols-[auto_minmax(0,1fr)] md:items-center">
-                <div class="flex h-24 w-32 items-center justify-center rounded-lg border border-slate-200 bg-white p-3">
-                  <img class="max-h-full max-w-full object-contain" src={menu.logoDataUrl} alt={menu.logoName || 'Menu logo'} />
+                <div class="flex h-28 w-36 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
+                  <img
+                    class="h-full w-full"
+                    src={menu.logoDataUrl}
+                    alt={menu.logoAlt || menu.logoName || 'Menu logo'}
+                    style={logoImageStyle}
+                  />
                 </div>
 
-                <fieldset>
-                  <legend class="text-sm font-medium text-slate-700">Logo position</legend>
-                  <div class="mt-3 grid max-w-md grid-cols-3 gap-2">
-                    <div></div>
-                    <button
-                      aria-pressed={menu.logoPlacement === 'above-eyebrow'}
-                      class={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                        menu.logoPlacement === 'above-eyebrow'
-                          ? 'border-brand-600 bg-brand-50 text-brand-800'
-                          : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
-                      }`}
-                      type="button"
-                      onclick={() => (menu.logoPlacement = 'above-eyebrow')}
-                    >
-                      Above
-                    </button>
-                    <div></div>
+                <div class="grid gap-4">
+                  <label class="block">
+                    <span class="text-sm font-medium text-slate-700">Logo description</span>
+                    <input
+                      class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                      bind:value={menu.logoAlt}
+                      placeholder="Alt text for exports and screen readers"
+                    />
+                  </label>
 
-                    <button
-                      aria-pressed={menu.logoPlacement === 'left-eyebrow'}
-                      class={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                        menu.logoPlacement === 'left-eyebrow'
-                          ? 'border-brand-600 bg-brand-50 text-brand-800'
-                          : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
-                      }`}
-                      type="button"
-                      onclick={() => (menu.logoPlacement = 'left-eyebrow')}
-                    >
-                      Left
-                    </button>
+                  <fieldset>
+                    <legend class="text-sm font-medium text-slate-700">Logo position</legend>
+                    <div class="mt-3 grid max-w-md grid-cols-3 gap-2">
+                      <div></div>
+                      <button
+                        aria-pressed={menu.logoPlacement === 'above-eyebrow'}
+                        class={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                          menu.logoPlacement === 'above-eyebrow'
+                            ? 'border-brand-600 bg-brand-50 text-brand-800'
+                            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.logoPlacement = 'above-eyebrow')}
+                      >
+                        Above
+                      </button>
+                      <div></div>
 
-                    <div class="flex min-h-20 items-center justify-center rounded-lg border border-slate-300 bg-white p-3 text-center">
-                      <span class="text-xs font-semibold uppercase tracking-[0.16em] text-brand-700">
-                        Small top text
-                      </span>
+                      <button
+                        aria-pressed={menu.logoPlacement === 'left-eyebrow'}
+                        class={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                          menu.logoPlacement === 'left-eyebrow'
+                            ? 'border-brand-600 bg-brand-50 text-brand-800'
+                            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.logoPlacement = 'left-eyebrow')}
+                      >
+                        Left
+                      </button>
+
+                      <div class="flex min-h-20 items-center justify-center rounded-lg border border-slate-300 bg-white p-3 text-center">
+                        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-brand-700">
+                          Small top text
+                        </span>
+                      </div>
+
+                      <button
+                        aria-pressed={menu.logoPlacement === 'right-eyebrow'}
+                        class={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                          menu.logoPlacement === 'right-eyebrow'
+                            ? 'border-brand-600 bg-brand-50 text-brand-800'
+                            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.logoPlacement = 'right-eyebrow')}
+                      >
+                        Right
+                      </button>
+
+                      <div></div>
+                      <button
+                        aria-pressed={menu.logoPlacement === 'below-eyebrow'}
+                        class={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                          menu.logoPlacement === 'below-eyebrow'
+                            ? 'border-brand-600 bg-brand-50 text-brand-800'
+                            : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.logoPlacement = 'below-eyebrow')}
+                      >
+                        Below
+                      </button>
+                      <div></div>
                     </div>
+                  </fieldset>
 
-                    <button
-                      aria-pressed={menu.logoPlacement === 'right-eyebrow'}
-                      class={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                        menu.logoPlacement === 'right-eyebrow'
-                          ? 'border-brand-600 bg-brand-50 text-brand-800'
-                          : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
-                      }`}
-                      type="button"
-                      onclick={() => (menu.logoPlacement = 'right-eyebrow')}
-                    >
-                      Right
-                    </button>
+                  <fieldset>
+                    <legend class="text-sm font-medium text-slate-700">Logo fit</legend>
+                    <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+                      {#each logoFitOptions as fit}
+                        <button
+                          aria-pressed={menu.logoFit === fit}
+                          class={`rounded-md px-3 py-2 text-sm font-medium capitalize transition ${
+                            menu.logoFit === fit ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                          }`}
+                          type="button"
+                          onclick={() => (menu.logoFit = fit)}
+                        >
+                          {fit}
+                        </button>
+                      {/each}
+                    </div>
+                  </fieldset>
 
-                    <div></div>
-                    <button
-                      aria-pressed={menu.logoPlacement === 'below-eyebrow'}
-                      class={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                        menu.logoPlacement === 'below-eyebrow'
-                          ? 'border-brand-600 bg-brand-50 text-brand-800'
-                          : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950'
-                      }`}
-                      type="button"
-                      onclick={() => (menu.logoPlacement = 'below-eyebrow')}
-                    >
-                      Below
-                    </button>
-                    <div></div>
+                  <div class="grid gap-3 sm:grid-cols-3">
+                    <label class="block">
+                      <span class="flex items-center justify-between gap-2 text-sm font-medium text-slate-700">
+                        Scale
+                        <span class="text-xs font-semibold text-slate-500">{Math.round(menu.logoScale)}%</span>
+                      </span>
+                      <input
+                        class="mt-2 block w-full accent-brand-600"
+                        max="200"
+                        min="40"
+                        step="5"
+                        type="range"
+                        value={menu.logoScale}
+                        oninput={(event) => (menu.logoScale = Number(event.currentTarget.value))}
+                      />
+                    </label>
+
+                    <label class="block">
+                      <span class="flex items-center justify-between gap-2 text-sm font-medium text-slate-700">
+                        Focus X
+                        <span class="text-xs font-semibold text-slate-500">{Math.round(menu.logoOffsetX)}</span>
+                      </span>
+                      <input
+                        class="mt-2 block w-full accent-brand-600"
+                        max="50"
+                        min="-50"
+                        step="5"
+                        type="range"
+                        value={menu.logoOffsetX}
+                        oninput={(event) => (menu.logoOffsetX = Number(event.currentTarget.value))}
+                      />
+                    </label>
+
+                    <label class="block">
+                      <span class="flex items-center justify-between gap-2 text-sm font-medium text-slate-700">
+                        Focus Y
+                        <span class="text-xs font-semibold text-slate-500">{Math.round(menu.logoOffsetY)}</span>
+                      </span>
+                      <input
+                        class="mt-2 block w-full accent-brand-600"
+                        max="50"
+                        min="-50"
+                        step="5"
+                        type="range"
+                        value={menu.logoOffsetY}
+                        oninput={(event) => (menu.logoOffsetY = Number(event.currentTarget.value))}
+                      />
+                    </label>
                   </div>
-                </fieldset>
+                </div>
               </div>
             {/if}
           </div>
@@ -5167,6 +5723,9 @@
                 <span class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                   <span>{section.items.length} item{section.items.length === 1 ? '' : 's'}</span>
                   <span>{section.columnSpan} col width</span>
+                  {#if section.imageLayout !== 'none'}
+                    <span>{section.imageLayout === 'thumbnail' ? 'photos' : 'photo banners'}</span>
+                  {/if}
                 </span>
               </button>
 
@@ -5210,7 +5769,7 @@
 
       {#if selectedSection}
         <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div class="mb-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+          <div class="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-end">
             <label class="block">
               <span class="text-sm font-medium text-slate-700">Section name</span>
               <input
@@ -5243,6 +5802,26 @@
                 >
                   2 col
                 </button>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend class="text-sm font-medium text-slate-700">Photo layout</legend>
+              <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+                {#each sectionImageLayoutOptions as option (option.value)}
+                  <button
+                    aria-pressed={selectedSection.imageLayout === option.value}
+                    class={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                      selectedSection.imageLayout === option.value
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                    type="button"
+                    onclick={() => (selectedSection.imageLayout = option.value)}
+                  >
+                    {option.label}
+                  </button>
+                {/each}
               </div>
             </fieldset>
 
@@ -5469,6 +6048,64 @@
                       placeholder="Optional item details"
                     ></textarea>
                   </label>
+
+                  <div class="rounded-lg border border-slate-200 bg-white p-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                          <Image class="h-4 w-4 text-brand-700" />
+                          Item photo
+                        </div>
+                        <p class="mt-1 text-xs leading-5 text-slate-500">
+                          {selectedSection.imageLayout === 'none'
+                            ? 'Choose a section photo layout to show item photos in the preview.'
+                            : selectedSection.imageLayout === 'thumbnail'
+                              ? 'This section will print item photos as thumbnails.'
+                              : 'This section will print item photos as banners.'}
+                        </p>
+                      </div>
+
+                      <div class="flex flex-wrap gap-2">
+                        <label
+                          class="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 focus-within:ring-4 focus-within:ring-brand-200"
+                        >
+                          <Upload class="mr-2 h-4 w-4" />
+                          {item.imageDataUrl ? 'Change' : 'Upload'}
+                          <input
+                            class="sr-only"
+                            type="file"
+                            accept="image/*"
+                            onchange={(event) => handleItemImageUpload(event, item)}
+                          />
+                        </label>
+
+                        {#if item.imageDataUrl}
+                          <Button color="light" onclick={() => removeItemImage(item)}>
+                            <X class="mr-2 h-4 w-4" />
+                            Remove
+                          </Button>
+                        {/if}
+                      </div>
+                    </div>
+
+                    {#if item.imageDataUrl}
+                      <div class="mt-4 grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+                        <img
+                          class="h-24 w-28 rounded-lg border border-slate-200 object-cover shadow-sm"
+                          src={item.imageDataUrl}
+                          alt={item.imageAlt || item.name || 'Menu item photo'}
+                        />
+                        <label class="block">
+                          <span class="text-sm font-medium text-slate-700">Photo description</span>
+                          <input
+                            class="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                            bind:value={item.imageAlt}
+                            placeholder="Alt text for exports and screen readers"
+                          />
+                        </label>
+                      </div>
+                    {/if}
+                  </div>
                 </div>
 
               </div>
@@ -5568,27 +6205,36 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
 
                   <div class="menu-print-header relative border-b border-slate-300 pb-6 text-center">
                     {#if hasLogo && menu.logoPlacement === 'left-eyebrow'}
-                      <img
-                        class="mx-auto mb-4 max-h-24 max-w-48 object-contain sm:absolute sm:left-0 sm:top-0 sm:mx-0 sm:mb-0 sm:max-h-20 sm:max-w-32"
-                        src={menu.logoDataUrl}
-                        alt={menu.logoName || 'Menu logo'}
-                      />
+                      <div class="menu-print-logo-frame mx-auto mb-4 h-24 w-48 overflow-hidden sm:absolute sm:left-0 sm:top-0 sm:mx-0 sm:mb-0 sm:h-20 sm:w-32">
+                        <img
+                          class="menu-print-logo h-full w-full"
+                          src={menu.logoDataUrl}
+                          alt={menu.logoAlt || menu.logoName || 'Menu logo'}
+                          style={logoImageStyle}
+                        />
+                      </div>
                     {/if}
 
                     {#if hasLogo && menu.logoPlacement === 'right-eyebrow'}
-                      <img
-                        class="mx-auto mb-4 max-h-24 max-w-48 object-contain sm:absolute sm:right-0 sm:top-0 sm:mx-0 sm:mb-0 sm:max-h-20 sm:max-w-32"
-                        src={menu.logoDataUrl}
-                        alt={menu.logoName || 'Menu logo'}
-                      />
+                      <div class="menu-print-logo-frame mx-auto mb-4 h-24 w-48 overflow-hidden sm:absolute sm:right-0 sm:top-0 sm:mx-0 sm:mb-0 sm:h-20 sm:w-32">
+                        <img
+                          class="menu-print-logo h-full w-full"
+                          src={menu.logoDataUrl}
+                          alt={menu.logoAlt || menu.logoName || 'Menu logo'}
+                          style={logoImageStyle}
+                        />
+                      </div>
                     {/if}
 
                     {#if hasLogo && menu.logoPlacement === 'above-eyebrow'}
-                      <img
-                        class="mx-auto mb-4 max-h-24 max-w-48 object-contain"
-                        src={menu.logoDataUrl}
-                        alt={menu.logoName || 'Menu logo'}
-                      />
+                      <div class="menu-print-logo-frame mx-auto mb-4 h-24 w-48 overflow-hidden">
+                        <img
+                          class="menu-print-logo h-full w-full"
+                          src={menu.logoDataUrl}
+                          alt={menu.logoAlt || menu.logoName || 'Menu logo'}
+                          style={logoImageStyle}
+                        />
+                      </div>
                     {/if}
 
                     {#if hasTopText}
@@ -5596,11 +6242,14 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                     {/if}
 
                     {#if hasLogo && menu.logoPlacement === 'below-eyebrow'}
-                      <img
-                        class="mx-auto mt-4 max-h-24 max-w-48 object-contain"
-                        src={menu.logoDataUrl}
-                        alt={menu.logoName || 'Menu logo'}
-                      />
+                      <div class="menu-print-logo-frame mx-auto mt-4 h-24 w-48 overflow-hidden">
+                        <img
+                          class="menu-print-logo h-full w-full"
+                          src={menu.logoDataUrl}
+                          alt={menu.logoAlt || menu.logoName || 'Menu logo'}
+                          style={logoImageStyle}
+                        />
+                      </div>
                     {/if}
 
                     <h3
@@ -5680,16 +6329,38 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
 
                       <div class="space-y-4">
                         {#each section.items as item (item.id)}
-                          <article class="menu-print-item">
-                            <div class="flex items-baseline justify-between gap-4">
-                              <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
-                              <p class="shrink-0 font-semibold text-slate-900">
-                                {item.price ? formatPrice(item.price) : ''}
-                              </p>
-                            </div>
-                            {#if item.description}
-                              <p class="mt-1 max-w-prose text-sm leading-6 text-slate-600">{item.description}</p>
+                          <article class={`menu-print-item menu-print-item-${section.imageLayout}`}>
+                            {#if item.imageDataUrl && section.imageLayout === 'banner'}
+                              <img
+                                class="menu-print-item-photo menu-print-item-photo-banner"
+                                src={item.imageDataUrl}
+                                alt={item.imageAlt || item.name || 'Menu item photo'}
+                              />
                             {/if}
+
+                            <div class={item.imageDataUrl && section.imageLayout === 'thumbnail' ? 'menu-print-item-content menu-print-item-content-with-photo' : 'menu-print-item-content'}>
+                              {#if item.imageDataUrl && section.imageLayout === 'thumbnail'}
+                                <img
+                                  class="menu-print-item-photo menu-print-item-photo-thumbnail"
+                                  src={item.imageDataUrl}
+                                  alt={item.imageAlt || item.name || 'Menu item photo'}
+                                />
+                              {/if}
+
+                              <div class="menu-print-item-body">
+                                <div class="menu-print-item-row flex items-baseline justify-between gap-4">
+                                  <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
+                                  <p class="menu-print-item-price shrink-0 font-semibold text-slate-900">
+                                    {item.price ? formatPrice(item.price) : ''}
+                                  </p>
+                                </div>
+                                {#if item.description}
+                                  <p class="menu-print-item-description mt-1 max-w-prose text-sm leading-6 text-slate-600">
+                                    {item.description}
+                                  </p>
+                                {/if}
+                              </div>
+                            </div>
                           </article>
                         {/each}
 
