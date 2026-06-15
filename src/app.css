@@ -331,6 +331,11 @@ textarea {
 
 .menu-print-preview .menu-print-header {
   border-color: var(--menu-rule, #cbd5e1);
+  text-align: var(--menu-header-align, center);
+}
+
+.menu-print-preview .menu-print-header > div {
+  justify-content: var(--menu-header-justify, center);
 }
 
 .menu-print-preview .menu-print-header > p:first-of-type {
@@ -345,6 +350,8 @@ textarea {
   color: var(--menu-text, #172033);
   font-family: var(--menu-heading-font, Georgia, ui-serif, serif);
   font-size: var(--menu-title-size, 1.875rem);
+  font-weight: var(--menu-title-weight, 400);
+  letter-spacing: var(--menu-title-letter-spacing, 0);
   line-height: 1.12;
 }
 
@@ -355,7 +362,19 @@ textarea {
 
 .menu-print-preview h4 {
   font-size: var(--menu-section-heading-size, 1.125rem);
+  font-weight: var(--menu-section-weight, 600);
   line-height: 1.25;
+  text-transform: var(--menu-section-transform, uppercase);
+}
+
+.menu-print-section {
+  break-inside: avoid-page;
+}
+
+.menu-print-section-heading {
+  flex-direction: var(--section-heading-direction, row);
+  justify-content: var(--section-heading-justify, var(--menu-section-justify, flex-start));
+  text-align: var(--section-heading-align, var(--menu-section-align, left));
 }
 
 .menu-print-logo {
@@ -395,11 +414,18 @@ textarea {
   line-height: var(--menu-item-line-height, 1.35);
 }
 
+.menu-print-preview h5 {
+  font-weight: var(--menu-item-weight, 600);
+  text-transform: var(--menu-item-transform, none);
+}
+
 .menu-print-preview .menu-print-item-price {
   color: var(--menu-text, #172033);
+  font-weight: var(--menu-price-weight, 600);
 }
 
 .menu-print-preview .menu-print-item-description,
+.menu-print-preview .menu-print-section-note,
 .menu-print-preview .menu-print-empty-section,
 .menu-print-preview .menu-print-empty-state,
 .menu-print-preview .menu-print-footer {
@@ -407,15 +433,57 @@ textarea {
   line-height: var(--menu-body-line-height, 1.5);
 }
 
+.menu-print-preview .menu-print-item-description,
+.menu-print-preview .menu-print-section-note {
+  font-weight: var(--menu-description-weight, 400);
+}
+
+.menu-print-preview .menu-description-indent-slight .menu-print-item-description {
+  margin-left: 1rem;
+}
+
+.menu-print-preview .menu-description-indent-deep .menu-print-item-description {
+  margin-left: 2rem;
+}
+
+.menu-print-preview .menu-print-item-centered .menu-print-item-description,
+.menu-print-preview .menu-item-layout-centered .menu-print-item-description {
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.menu-print-price-leader {
+  border-bottom: 1px dotted var(--menu-rule, #cbd5e1);
+  min-width: 2rem;
+  transform: translateY(-0.2em);
+}
+
+.menu-section-bg-tint,
+.menu-section-bg-box {
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.menu-section-bg-tint {
+  background: rgba(15, 23, 42, 0.035);
+}
+
+.menu-section-bg-box {
+  border: 1px solid var(--menu-rule, #cbd5e1);
+}
+
 .menu-print-preview .menu-print-header > p:not(:first-of-type),
 .menu-print-preview .menu-print-header > div,
 .menu-print-preview .menu-print-footer p,
 .menu-print-preview .menu-print-footer span {
+  font-weight: var(--menu-footer-weight, 400);
   line-height: var(--menu-body-line-height, 1.5);
 }
 
 .menu-print-preview .menu-print-header > p:not(:first-of-type) {
   font-size: var(--menu-description-size, 0.875rem);
+  font-weight: var(--menu-subtitle-weight, 400);
 }
 
 .menu-print-preview .menu-print-header > div {
@@ -444,9 +512,10 @@ textarea {
 
 .menu-print-preview .menu-print-section-rule {
   border-color: var(--menu-rule, #cbd5e1);
-  border-top-style: var(--menu-rule-style, solid);
-  border-top-width: var(--menu-rule-width, calc(1px * var(--menu-rule-scale, 1)));
-  display: var(--menu-rule-display, block);
+  border-top-style: var(--section-rule-style, var(--menu-rule-style, solid));
+  border-top-width: var(--section-rule-width, var(--menu-rule-width, calc(1px * var(--menu-rule-scale, 1))));
+  display: var(--section-rule-display, var(--menu-rule-display, block));
+  flex: var(--section-rule-flex, 1 1 0%);
 }
 
 .menu-print-preview .menu-print-section .space-y-4 > :not([hidden]) ~ :not([hidden]) {
@@ -464,11 +533,11 @@ textarea {
 }
 
 .menu-style-professional .menu-print-header {
-  text-align: left;
+  text-align: var(--menu-header-align, left);
 }
 
 .menu-style-professional .menu-print-header > div {
-  justify-content: flex-start;
+  justify-content: var(--menu-header-justify, flex-start);
 }
 
 .menu-style-hometown .menu-print-section-heading {

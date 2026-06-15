@@ -59,6 +59,15 @@
     | 'dividerWeightScale'
     | 'decorationScale';
   type DesignColorSettingKey = 'accentColor' | 'backgroundColor' | 'textColor' | 'mutedColor' | 'ruleColor';
+  type DesignFontWeightSettingKey =
+    | 'titleWeight'
+    | 'subtitleWeight'
+    | 'sectionHeadingWeight'
+    | 'itemNameWeight'
+    | 'descriptionWeight'
+    | 'priceWeight'
+    | 'footerWeight';
+  type DesignTextTransformSettingKey = 'sectionHeadingTransform' | 'itemNameTransform';
   type HeadingFontChoice = 'preset' | 'serif' | 'sans' | 'display';
   type BodyFontChoice = 'preset' | 'sans' | 'serif';
   type DividerStyle = 'preset' | 'line' | 'bold' | 'double' | 'none';
@@ -67,6 +76,16 @@
   type HeaderFlair = 'none' | 'rule' | 'ornament';
   type WatermarkStyle = 'none' | 'botanical';
   type PaperTexture = 'none' | 'warm' | 'parchment' | 'sage';
+  type FontWeightChoice = 'regular' | 'medium' | 'semibold' | 'bold';
+  type TextTransformChoice = 'preset' | 'none' | 'uppercase' | 'capitalize';
+  type TextAlignChoice = 'left' | 'center' | 'right';
+  type ItemLayoutChoice = 'stacked' | 'inline' | 'right-price' | 'leader' | 'centered';
+  type SectionItemLayoutChoice = 'preset' | ItemLayoutChoice;
+  type PriceCurrencyStyle = 'symbol' | 'plain';
+  type PriceDecimalStyle = 'auto' | 'always' | 'trim';
+  type DescriptionIndent = 'none' | 'slight' | 'deep';
+  type SectionHeadingAlignChoice = 'preset' | TextAlignChoice;
+  type SectionBackgroundStyle = 'none' | 'tint' | 'box';
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -100,6 +119,23 @@
     itemSpacingScale: number;
     dividerWeightScale: number;
     decorationScale: number;
+    headerAlign: TextAlignChoice;
+    sectionHeadingAlign: TextAlignChoice;
+    titleWeight: FontWeightChoice;
+    subtitleWeight: FontWeightChoice;
+    sectionHeadingWeight: FontWeightChoice;
+    itemNameWeight: FontWeightChoice;
+    descriptionWeight: FontWeightChoice;
+    priceWeight: FontWeightChoice;
+    footerWeight: FontWeightChoice;
+    sectionHeadingTransform: TextTransformChoice;
+    itemNameTransform: TextTransformChoice;
+    titleLetterSpacingScale: number;
+    sectionLetterSpacingScale: number;
+    itemLayout: ItemLayoutChoice;
+    priceCurrencyStyle: PriceCurrencyStyle;
+    priceDecimalStyle: PriceDecimalStyle;
+    descriptionIndent: DescriptionIndent;
   };
 
   type MenuItem = {
@@ -117,6 +153,11 @@
     name: string;
     columnSpan: SectionColumnSpan;
     imageLayout: SectionImageLayout;
+    note: string;
+    headingAlign: SectionHeadingAlignChoice;
+    dividerStyle: DividerStyle;
+    backgroundStyle: SectionBackgroundStyle;
+    itemLayout: SectionItemLayoutChoice;
     items: MenuItem[];
   };
 
@@ -175,6 +216,11 @@
     name: string;
     columnSpan?: SectionColumnSpan;
     imageLayout?: SectionImageLayout;
+    note?: string;
+    headingAlign?: SectionHeadingAlignChoice;
+    dividerStyle?: DividerStyle;
+    backgroundStyle?: SectionBackgroundStyle;
+    itemLayout?: SectionItemLayoutChoice;
     items: TemplateMenuItem[];
   };
 
@@ -232,6 +278,11 @@
     name: string;
     columnSpan: SectionColumnSpan;
     imageLayout: SectionImageLayout;
+    note: string;
+    headingAlign: SectionHeadingAlignChoice;
+    dividerStyle: DividerStyle;
+    backgroundStyle: SectionBackgroundStyle;
+    itemLayout: SectionItemLayoutChoice;
     items: MenuItem[];
     isContinuation: boolean;
   };
@@ -321,6 +372,72 @@
     { label: 'Thumb', value: 'thumbnail' },
     { label: 'Banner', value: 'banner' },
   ];
+  const fontWeightOptions: Array<{ label: string; value: FontWeightChoice }> = [
+    { label: 'Regular', value: 'regular' },
+    { label: 'Medium', value: 'medium' },
+    { label: 'Semi', value: 'semibold' },
+    { label: 'Bold', value: 'bold' },
+  ];
+  const textAlignOptions: Array<{ label: string; value: TextAlignChoice }> = [
+    { label: 'Left', value: 'left' },
+    { label: 'Center', value: 'center' },
+    { label: 'Right', value: 'right' },
+  ];
+  const sectionHeadingAlignOptions: Array<{ label: string; value: SectionHeadingAlignChoice }> = [
+    { label: 'Preset', value: 'preset' },
+    { label: 'Left', value: 'left' },
+    { label: 'Center', value: 'center' },
+    { label: 'Right', value: 'right' },
+  ];
+  const textTransformOptions: Array<{ label: string; value: TextTransformChoice }> = [
+    { label: 'Preset', value: 'preset' },
+    { label: 'None', value: 'none' },
+    { label: 'Upper', value: 'uppercase' },
+    { label: 'Title', value: 'capitalize' },
+  ];
+  const typographyWeightControls: Array<{ label: string; setting: DesignFontWeightSettingKey }> = [
+    { label: 'Title', setting: 'titleWeight' },
+    { label: 'Subtitle', setting: 'subtitleWeight' },
+    { label: 'Sections', setting: 'sectionHeadingWeight' },
+    { label: 'Items', setting: 'itemNameWeight' },
+    { label: 'Descriptions', setting: 'descriptionWeight' },
+    { label: 'Prices', setting: 'priceWeight' },
+    { label: 'Footer', setting: 'footerWeight' },
+  ];
+  const textTransformControls: Array<{ label: string; setting: DesignTextTransformSettingKey }> = [
+    { label: 'Section headings', setting: 'sectionHeadingTransform' },
+    { label: 'Item names', setting: 'itemNameTransform' },
+  ];
+  const itemLayoutOptions: Array<{ label: string; value: ItemLayoutChoice }> = [
+    { label: 'Stacked', value: 'stacked' },
+    { label: 'Inline', value: 'inline' },
+    { label: 'Right', value: 'right-price' },
+    { label: 'Leaders', value: 'leader' },
+    { label: 'Center', value: 'centered' },
+  ];
+  const sectionItemLayoutOptions: Array<{ label: string; value: SectionItemLayoutChoice }> = [
+    { label: 'Preset', value: 'preset' },
+    ...itemLayoutOptions,
+  ];
+  const priceCurrencyOptions: Array<{ label: string; value: PriceCurrencyStyle }> = [
+    { label: '$', value: 'symbol' },
+    { label: 'Plain', value: 'plain' },
+  ];
+  const priceDecimalOptions: Array<{ label: string; value: PriceDecimalStyle }> = [
+    { label: 'Auto', value: 'auto' },
+    { label: 'Always', value: 'always' },
+    { label: 'Trim', value: 'trim' },
+  ];
+  const descriptionIndentOptions: Array<{ label: string; value: DescriptionIndent }> = [
+    { label: 'None', value: 'none' },
+    { label: 'Slight', value: 'slight' },
+    { label: 'Deep', value: 'deep' },
+  ];
+  const sectionBackgroundOptions: Array<{ label: string; value: SectionBackgroundStyle }> = [
+    { label: 'None', value: 'none' },
+    { label: 'Tint', value: 'tint' },
+    { label: 'Box', value: 'box' },
+  ];
   const previewPixelsPerInch = 72;
   const editorPanels: Array<{ id: EditorPanelId; label: string; description: string }> = [
     { id: 'menu', label: 'Menu', description: 'Name, subtitle, and logo' },
@@ -359,6 +476,23 @@
     itemSpacingScale: 100,
     dividerWeightScale: 100,
     decorationScale: 100,
+    headerAlign: 'center',
+    sectionHeadingAlign: 'left',
+    titleWeight: 'regular',
+    subtitleWeight: 'regular',
+    sectionHeadingWeight: 'semibold',
+    itemNameWeight: 'semibold',
+    descriptionWeight: 'regular',
+    priceWeight: 'semibold',
+    footerWeight: 'regular',
+    sectionHeadingTransform: 'preset',
+    itemNameTransform: 'none',
+    titleLetterSpacingScale: 0,
+    sectionLetterSpacingScale: 100,
+    itemLayout: 'right-price',
+    priceCurrencyStyle: 'symbol',
+    priceDecimalStyle: 'always',
+    descriptionIndent: 'none',
   });
 
   const headingFontStacks: Record<Exclude<HeadingFontChoice, 'preset'>, string> = {
@@ -370,6 +504,19 @@
   const bodyFontStacks: Record<Exclude<BodyFontChoice, 'preset'>, string> = {
     sans: 'Inter, ui-sans-serif, system-ui, sans-serif',
     serif: 'Georgia, "Times New Roman", serif',
+  };
+
+  const fontWeightValues: Record<FontWeightChoice, number> = {
+    regular: 400,
+    medium: 500,
+    semibold: 600,
+    bold: 700,
+  };
+
+  const textAlignJustifyValues: Record<TextAlignChoice, string> = {
+    left: 'flex-start',
+    center: 'center',
+    right: 'flex-end',
   };
 
   const designColorControls: Array<{
@@ -664,6 +811,11 @@
     name,
     columnSpan,
     imageLayout: 'none',
+    note: '',
+    headingAlign: 'preset',
+    dividerStyle: 'preset',
+    backgroundStyle: 'none',
+    itemLayout: 'preset',
     items: [],
   });
 
@@ -684,6 +836,11 @@
     name: copyName(section.name, 'Untitled section'),
     columnSpan: section.columnSpan,
     imageLayout: section.imageLayout,
+    note: section.note,
+    headingAlign: section.headingAlign,
+    dividerStyle: section.dividerStyle,
+    backgroundStyle: section.backgroundStyle,
+    itemLayout: section.itemLayout,
     items: section.items.map((item) => cloneMenuItem(item)),
   });
 
@@ -702,6 +859,11 @@
     name: section.name,
     columnSpan: section.columnSpan,
     imageLayout: section.imageLayout,
+    note: section.note,
+    headingAlign: section.headingAlign,
+    dividerStyle: section.dividerStyle,
+    backgroundStyle: section.backgroundStyle,
+    itemLayout: section.itemLayout,
     items: section.items.map((item) => copyMenuItem(item, preserveId)),
   });
 
@@ -808,6 +970,11 @@
         name: 'Appetizers',
         columnSpan: 2,
         imageLayout: 'none',
+        note: '',
+        headingAlign: 'preset',
+        dividerStyle: 'preset',
+        backgroundStyle: 'none',
+        itemLayout: 'preset',
         items: [
           createItem({
             name: 'Onion Rings',
@@ -831,6 +998,11 @@
         name: 'Burgers',
         columnSpan: 1,
         imageLayout: 'none',
+        note: '',
+        headingAlign: 'preset',
+        dividerStyle: 'preset',
+        backgroundStyle: 'none',
+        itemLayout: 'preset',
         items: [
           createItem({
             name: 'Classic Beef Burger',
@@ -854,6 +1026,11 @@
         name: 'Sandwiches & Wraps',
         columnSpan: 1,
         imageLayout: 'none',
+        note: '',
+        headingAlign: 'preset',
+        dividerStyle: 'preset',
+        backgroundStyle: 'none',
+        itemLayout: 'preset',
         items: [
           createItem({
             name: 'Crispy Chicken Wrap',
@@ -877,6 +1054,11 @@
         name: 'Pizza',
         columnSpan: 2,
         imageLayout: 'none',
+        note: '',
+        headingAlign: 'preset',
+        dividerStyle: 'preset',
+        backgroundStyle: 'none',
+        itemLayout: 'preset',
         items: [
           createItem({
             name: 'Cheese Pizza',
@@ -900,6 +1082,11 @@
         name: 'Entrees',
         columnSpan: 2,
         imageLayout: 'none',
+        note: '',
+        headingAlign: 'preset',
+        dividerStyle: 'preset',
+        backgroundStyle: 'none',
+        itemLayout: 'preset',
         items: [
           createItem({
             name: 'Chicken Fried Steak',
@@ -1494,6 +1681,61 @@
     return 'none';
   };
 
+  const normalizeFontWeight = (value: unknown, fallback: FontWeightChoice): FontWeightChoice =>
+    value === 'regular' || value === 'medium' || value === 'semibold' || value === 'bold' ? value : fallback;
+
+  const normalizeTextTransform = (value: unknown, fallback: TextTransformChoice): TextTransformChoice =>
+    value === 'preset' || value === 'none' || value === 'uppercase' || value === 'capitalize' ? value : fallback;
+
+  const normalizeTextAlign = (value: unknown, fallback: TextAlignChoice): TextAlignChoice =>
+    value === 'left' || value === 'center' || value === 'right' ? value : fallback;
+
+  const normalizeItemLayout = (value: unknown, fallback: ItemLayoutChoice): ItemLayoutChoice =>
+    value === 'stacked' ||
+    value === 'inline' ||
+    value === 'right-price' ||
+    value === 'leader' ||
+    value === 'centered'
+      ? value
+      : fallback;
+
+  const normalizeSectionItemLayout = (value: unknown): SectionItemLayoutChoice => {
+    if (value === 'preset') return 'preset';
+    if (
+      value === 'stacked' ||
+      value === 'inline' ||
+      value === 'right-price' ||
+      value === 'leader' ||
+      value === 'centered'
+    ) {
+      return value;
+    }
+
+    return 'preset';
+  };
+
+  const normalizePriceCurrencyStyle = (value: unknown): PriceCurrencyStyle => (value === 'plain' ? 'plain' : 'symbol');
+
+  const normalizePriceDecimalStyle = (value: unknown): PriceDecimalStyle => {
+    if (value === 'auto' || value === 'trim') return value;
+    return 'always';
+  };
+
+  const normalizeDescriptionIndent = (value: unknown): DescriptionIndent => {
+    if (value === 'slight' || value === 'deep') return value;
+    return 'none';
+  };
+
+  const normalizeSectionHeadingAlign = (value: unknown): SectionHeadingAlignChoice => {
+    if (value === 'left' || value === 'center' || value === 'right') return value;
+    return 'preset';
+  };
+
+  const normalizeSectionBackgroundStyle = (value: unknown): SectionBackgroundStyle => {
+    if (value === 'tint' || value === 'box') return value;
+    return 'none';
+  };
+
   const normalizeStylePresetId = (presetId: unknown): StylePresetId => {
     if (stylePresets.some((preset) => preset.id === presetId)) return presetId as StylePresetId;
     return 'simple';
@@ -1604,6 +1846,36 @@
         250,
       ),
       decorationScale: normalizeNumericSetting(value.decorationScale, defaults.decorationScale, 60, 150),
+      headerAlign: normalizeTextAlign(value.headerAlign, defaults.headerAlign),
+      sectionHeadingAlign: normalizeTextAlign(value.sectionHeadingAlign, defaults.sectionHeadingAlign),
+      titleWeight: normalizeFontWeight(value.titleWeight, defaults.titleWeight),
+      subtitleWeight: normalizeFontWeight(value.subtitleWeight, defaults.subtitleWeight),
+      sectionHeadingWeight: normalizeFontWeight(value.sectionHeadingWeight, defaults.sectionHeadingWeight),
+      itemNameWeight: normalizeFontWeight(value.itemNameWeight, defaults.itemNameWeight),
+      descriptionWeight: normalizeFontWeight(value.descriptionWeight, defaults.descriptionWeight),
+      priceWeight: normalizeFontWeight(value.priceWeight, defaults.priceWeight),
+      footerWeight: normalizeFontWeight(value.footerWeight, defaults.footerWeight),
+      sectionHeadingTransform: normalizeTextTransform(
+        value.sectionHeadingTransform,
+        defaults.sectionHeadingTransform,
+      ),
+      itemNameTransform: normalizeTextTransform(value.itemNameTransform, defaults.itemNameTransform),
+      titleLetterSpacingScale: normalizeNumericSetting(
+        value.titleLetterSpacingScale,
+        defaults.titleLetterSpacingScale,
+        0,
+        200,
+      ),
+      sectionLetterSpacingScale: normalizeNumericSetting(
+        value.sectionLetterSpacingScale,
+        defaults.sectionLetterSpacingScale,
+        0,
+        200,
+      ),
+      itemLayout: normalizeItemLayout(value.itemLayout, defaults.itemLayout),
+      priceCurrencyStyle: normalizePriceCurrencyStyle(value.priceCurrencyStyle),
+      priceDecimalStyle: normalizePriceDecimalStyle(value.priceDecimalStyle),
+      descriptionIndent: normalizeDescriptionIndent(value.descriptionIndent),
     };
   };
 
@@ -1747,6 +2019,11 @@
         name: section.name,
         columnSpan: section.columnSpan ?? defaultSectionColumnSpan(section.name),
         imageLayout: section.imageLayout ?? 'none',
+        note: section.note ?? '',
+        headingAlign: section.headingAlign ?? 'preset',
+        dividerStyle: section.dividerStyle ?? 'preset',
+        backgroundStyle: section.backgroundStyle ?? 'none',
+        itemLayout: section.itemLayout ?? 'preset',
         items: section.items.map((item) => createItem(item)),
       })),
     };
@@ -1917,6 +2194,11 @@
       name,
       columnSpan: normalizeSectionColumnSpan(value.columnSpan, name),
       imageLayout: normalizeSectionImageLayout(value.imageLayout),
+      note: normalizeTextField(value.note),
+      headingAlign: normalizeSectionHeadingAlign(value.headingAlign),
+      dividerStyle: normalizeDividerStyle(value.dividerStyle),
+      backgroundStyle: normalizeSectionBackgroundStyle(value.backgroundStyle),
+      itemLayout: normalizeSectionItemLayout(value.itemLayout),
       items: value.items.map((item, itemIndex) => normalizeImportedItem(item, itemIndex, sectionIndex)),
     };
   };
@@ -2324,6 +2606,18 @@
       ruleWidth: `${Math.max(1, scale).toFixed(2)}px`,
     };
   });
+  let headerJustify = $derived(textAlignJustifyValues[menu.designSettings.headerAlign]);
+  let sectionHeadingJustify = $derived(textAlignJustifyValues[menu.designSettings.sectionHeadingAlign]);
+  let titleLetterSpacing = $derived(`${(menu.designSettings.titleLetterSpacingScale * 0.0012).toFixed(3)}em`);
+  let sectionLetterSpacing = $derived(`${(menu.designSettings.sectionLetterSpacingScale * 0.0012).toFixed(3)}em`);
+  let resolvedSectionTransform = $derived(
+    menu.designSettings.sectionHeadingTransform === 'preset'
+      ? presetVariable('--menu-header-transform') || 'uppercase'
+      : menu.designSettings.sectionHeadingTransform,
+  );
+  let resolvedItemTransform = $derived(
+    menu.designSettings.itemNameTransform === 'preset' ? 'none' : menu.designSettings.itemNameTransform,
+  );
   let printPageWidth = $derived(
     menu.printSettings.orientation === 'portrait' ? selectedPrintPageSize.width : selectedPrintPageSize.height,
   );
@@ -2350,6 +2644,10 @@
       `--menu-rule: ${activeRuleColor};`,
       `--menu-heading-font: ${activeHeadingFont};`,
       `--menu-body-font: ${activeBodyFont};`,
+      `--menu-header-align: ${menu.designSettings.headerAlign};`,
+      `--menu-header-justify: ${headerJustify};`,
+      `--menu-section-align: ${menu.designSettings.sectionHeadingAlign};`,
+      `--menu-section-justify: ${sectionHeadingJustify};`,
       `--menu-title-size: ${titleFontSize.toFixed(1)}px;`,
       `--menu-section-heading-size: ${sectionHeadingFontSize.toFixed(1)}px;`,
       `--menu-item-name-size: ${itemNameFontSize.toFixed(1)}px;`,
@@ -2368,9 +2666,86 @@
       `--menu-heading-divider-style: ${dividerConfig.headingDividerStyle};`,
       `--menu-heading-divider-width: ${dividerConfig.headingDividerWidth};`,
       `--menu-decoration-scale: ${(menu.designSettings.decorationScale / 100).toFixed(2)};`,
+      `--menu-title-weight: ${fontWeightValues[menu.designSettings.titleWeight]};`,
+      `--menu-subtitle-weight: ${fontWeightValues[menu.designSettings.subtitleWeight]};`,
+      `--menu-section-weight: ${fontWeightValues[menu.designSettings.sectionHeadingWeight]};`,
+      `--menu-item-weight: ${fontWeightValues[menu.designSettings.itemNameWeight]};`,
+      `--menu-description-weight: ${fontWeightValues[menu.designSettings.descriptionWeight]};`,
+      `--menu-price-weight: ${fontWeightValues[menu.designSettings.priceWeight]};`,
+      `--menu-footer-weight: ${fontWeightValues[menu.designSettings.footerWeight]};`,
+      `--menu-title-letter-spacing: ${titleLetterSpacing};`,
+      `--menu-section-letter-spacing: ${sectionLetterSpacing};`,
+      `--menu-section-transform: ${resolvedSectionTransform};`,
+      `--menu-item-transform: ${resolvedItemTransform};`,
     ].join(' '),
   );
   let previewStyleVariables = $derived(`${activeStyleVariables} ${printSetupVariables} ${designStyleVariables}`);
+
+  const getSectionHeadingAlign = (section: PreviewSectionChunk | MenuSection): TextAlignChoice =>
+    section.headingAlign === 'preset' ? menu.designSettings.sectionHeadingAlign : section.headingAlign;
+
+  const getSectionItemLayout = (section: PreviewSectionChunk | MenuSection): ItemLayoutChoice =>
+    section.itemLayout === 'preset' ? menu.designSettings.itemLayout : section.itemLayout;
+
+  const getSectionRuleConfig = (section: PreviewSectionChunk | MenuSection) => {
+    const scale = menu.designSettings.dividerWeightScale / 100;
+
+    if (section.dividerStyle === 'none') {
+      return {
+        display: 'none',
+        style: 'solid',
+        width: '0px',
+      };
+    }
+
+    if (section.dividerStyle === 'double') {
+      return {
+        display: 'block',
+        style: 'double',
+        width: `${Math.max(1, 3 * scale).toFixed(2)}px`,
+      };
+    }
+
+    if (section.dividerStyle === 'bold') {
+      return {
+        display: 'block',
+        style: 'solid',
+        width: `${Math.max(1, 2 * scale).toFixed(2)}px`,
+      };
+    }
+
+    if (section.dividerStyle === 'line') {
+      return {
+        display: 'block',
+        style: 'solid',
+        width: `${Math.max(1, scale).toFixed(2)}px`,
+      };
+    }
+
+    return {
+      display: 'var(--menu-rule-display, block)',
+      style: 'var(--menu-rule-style, solid)',
+      width: 'var(--menu-rule-width, 1px)',
+    };
+  };
+
+  const getSectionStyleVariables = (section: PreviewSectionChunk) => {
+    const sectionAlign = getSectionHeadingAlign(section);
+    const sectionRule = getSectionRuleConfig(section);
+    const headingDirection = sectionAlign === 'right' ? 'row-reverse' : 'row';
+    const ruleFlex = sectionAlign === 'center' ? '0 1 7rem' : '1 1 0%';
+
+    return [
+      `--section-column-span: ${Math.min(section.columnSpan, menu.printSettings.columns)};`,
+      `--section-heading-align: ${sectionAlign};`,
+      `--section-heading-justify: ${textAlignJustifyValues[sectionAlign]};`,
+      `--section-heading-direction: ${headingDirection};`,
+      `--section-rule-flex: ${ruleFlex};`,
+      `--section-rule-display: ${sectionRule.display};`,
+      `--section-rule-style: ${sectionRule.style};`,
+      `--section-rule-width: ${sectionRule.width};`,
+    ].join(' ');
+  };
   let printPageCss = $derived(`
 @media print {
   @page {
@@ -2502,13 +2877,26 @@
   });
 
   const formatPrice = (price: string) => {
-    const numericPrice = Number(price);
-    if (Number.isNaN(numericPrice)) return price.trim();
+    const trimmedPrice = price.trim();
+    const numericPrice = Number(trimmedPrice.replace(/[$,]/g, ''));
 
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
+    if (!trimmedPrice || Number.isNaN(numericPrice)) return trimmedPrice;
+
+    const minimumFractionDigits =
+      menu.designSettings.priceDecimalStyle === 'always' || (!Number.isInteger(numericPrice) && menu.designSettings.priceDecimalStyle === 'auto')
+        ? 2
+        : 0;
+    const maximumFractionDigits = menu.designSettings.priceDecimalStyle === 'trim' ? 2 : Math.max(2, minimumFractionDigits);
+    const formattedPrice = new Intl.NumberFormat('en-US', {
       currency: 'USD',
+      maximumFractionDigits,
+      minimumFractionDigits,
+      style: menu.designSettings.priceCurrencyStyle === 'symbol' ? 'currency' : 'decimal',
     }).format(numericPrice);
+
+    return menu.designSettings.priceDecimalStyle === 'trim'
+      ? formattedPrice.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '')
+      : formattedPrice;
   };
 
   const formatDesignSetting = (value: number) => `${Math.round(value)}%`;
@@ -2823,18 +3211,23 @@
     const sectionSpan = Math.min(section.columnSpan, menu.printSettings.columns) as SectionColumnSpan;
     const itemGap = effectiveItemSpacingRem * 16;
     const headingHeight = sectionHeadingFontSize * 1.35 + 26;
+    const noteLines = estimateWrappedLineCount(section.note, sectionSpan === 1 ? 42 : 88);
+    const noteHeight = noteLines > 0 ? noteLines * descriptionFontSize * bodyLineHeight + 12 : 0;
+    const sectionPadding = section.backgroundStyle === 'none' ? 0 : 26;
 
-    if (section.items.length === 0) return headingHeight + 30;
+    if (section.items.length === 0) return headingHeight + noteHeight + 30 + sectionPadding;
 
     return (
       headingHeight +
+      noteHeight +
       section.items.reduce(
         (height, item, itemIndex) =>
           height +
           estimatePreviewItemHeight(item, sectionSpan, section.imageLayout) +
           (itemIndex === 0 ? 0 : itemGap),
         0,
-      )
+      ) +
+      sectionPadding
     );
   };
 
@@ -2896,6 +3289,11 @@
     name: section.name,
     columnSpan: section.columnSpan,
     imageLayout: section.imageLayout,
+    note: section.note,
+    headingAlign: section.headingAlign,
+    dividerStyle: section.dividerStyle,
+    backgroundStyle: section.backgroundStyle,
+    itemLayout: section.itemLayout,
     items,
     isContinuation: chunkIndex > 0,
   });
@@ -2968,6 +3366,11 @@
               name: chunk.name,
               columnSpan: chunk.columnSpan,
               imageLayout: chunk.imageLayout,
+              note: chunk.note,
+              headingAlign: chunk.headingAlign,
+              dividerStyle: chunk.dividerStyle,
+              backgroundStyle: chunk.backgroundStyle,
+              itemLayout: chunk.itemLayout,
               items: chunk.items,
             },
             nextItems,
@@ -2990,6 +3393,11 @@
             name: chunk.name,
             columnSpan: chunk.columnSpan,
             imageLayout: chunk.imageLayout,
+            note: chunk.note,
+            headingAlign: chunk.headingAlign,
+            dividerStyle: chunk.dividerStyle,
+            backgroundStyle: chunk.backgroundStyle,
+            itemLayout: chunk.itemLayout,
             items: chunk.items,
           },
             chunkItems,
@@ -5163,6 +5571,226 @@
           </fieldset>
 
           <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Alignment</legend>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <span class="text-xs font-medium uppercase text-slate-500">Header</span>
+                <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+                  {#each textAlignOptions as option (option.value)}
+                    <button
+                      aria-pressed={menu.designSettings.headerAlign === option.value}
+                      class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                        menu.designSettings.headerAlign === option.value
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      type="button"
+                      onclick={() => (menu.designSettings.headerAlign = option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+
+              <div>
+                <span class="text-xs font-medium uppercase text-slate-500">Section headings</span>
+                <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+                  {#each textAlignOptions as option (option.value)}
+                    <button
+                      aria-pressed={menu.designSettings.sectionHeadingAlign === option.value}
+                      class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                        menu.designSettings.sectionHeadingAlign === option.value
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      type="button"
+                      onclick={() => (menu.designSettings.sectionHeadingAlign = option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Text weights</legend>
+            <div class="mt-3 grid gap-3">
+              {#each typographyWeightControls as control (control.setting)}
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <span class="text-sm font-medium text-slate-800">{control.label}</span>
+                  <div class="mt-2 grid grid-cols-4 rounded-lg border border-slate-300 bg-white p-1">
+                    {#each fontWeightOptions as option (option.value)}
+                      <button
+                        aria-pressed={menu.designSettings[control.setting] === option.value}
+                        class={`min-h-9 rounded-md px-2 py-1.5 text-xs font-medium transition ${
+                          menu.designSettings[control.setting] === option.value
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.designSettings[control.setting] = option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Text case and spacing</legend>
+            <div class="mt-3 grid gap-4">
+              {#each textTransformControls as control (control.setting)}
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <span class="text-sm font-medium text-slate-800">{control.label}</span>
+                  <div class="mt-2 grid grid-cols-4 rounded-lg border border-slate-300 bg-white p-1">
+                    {#each textTransformOptions as option (option.value)}
+                      <button
+                        aria-pressed={menu.designSettings[control.setting] === option.value}
+                        class={`min-h-9 rounded-md px-2 py-1.5 text-xs font-medium transition ${
+                          menu.designSettings[control.setting] === option.value
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.designSettings[control.setting] = option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <span class="flex items-center justify-between gap-2 text-sm font-medium text-slate-800">
+                    Title letter spacing
+                    <span class="text-xs font-semibold text-slate-500">{Math.round(menu.designSettings.titleLetterSpacingScale)}%</span>
+                  </span>
+                  <input
+                    class="mt-3 block w-full accent-brand-600"
+                    max="200"
+                    min="0"
+                    step="5"
+                    type="range"
+                    value={menu.designSettings.titleLetterSpacingScale}
+                    oninput={(event) => (menu.designSettings.titleLetterSpacingScale = Number(event.currentTarget.value))}
+                  />
+                </label>
+
+                <label class="block rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <span class="flex items-center justify-between gap-2 text-sm font-medium text-slate-800">
+                    Section letter spacing
+                    <span class="text-xs font-semibold text-slate-500">{Math.round(menu.designSettings.sectionLetterSpacingScale)}%</span>
+                  </span>
+                  <input
+                    class="mt-3 block w-full accent-brand-600"
+                    max="200"
+                    min="0"
+                    step="5"
+                    type="range"
+                    value={menu.designSettings.sectionLetterSpacingScale}
+                    oninput={(event) => (menu.designSettings.sectionLetterSpacingScale = Number(event.currentTarget.value))}
+                  />
+                </label>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-semibold text-slate-900">Item and price layout</legend>
+            <div class="mt-3 grid gap-4">
+              <div>
+                <span class="text-xs font-medium uppercase text-slate-500">Default item layout</span>
+                <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1 sm:grid-cols-5">
+                  {#each itemLayoutOptions as option (option.value)}
+                    <button
+                      aria-pressed={menu.designSettings.itemLayout === option.value}
+                      class={`min-h-10 rounded-md px-2 py-2 text-sm font-medium transition ${
+                        menu.designSettings.itemLayout === option.value
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      type="button"
+                      onclick={() => (menu.designSettings.itemLayout = option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <span class="text-xs font-medium uppercase text-slate-500">Price style</span>
+                  <div class="mt-2 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1">
+                    {#each priceCurrencyOptions as option (option.value)}
+                      <button
+                        aria-pressed={menu.designSettings.priceCurrencyStyle === option.value}
+                        class={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition ${
+                          menu.designSettings.priceCurrencyStyle === option.value
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.designSettings.priceCurrencyStyle = option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+
+                <div>
+                  <span class="text-xs font-medium uppercase text-slate-500">Decimals</span>
+                  <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+                    {#each priceDecimalOptions as option (option.value)}
+                      <button
+                        aria-pressed={menu.designSettings.priceDecimalStyle === option.value}
+                        class={`min-h-10 rounded-md px-2 py-2 text-sm font-medium transition ${
+                          menu.designSettings.priceDecimalStyle === option.value
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.designSettings.priceDecimalStyle = option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+
+                <div>
+                  <span class="text-xs font-medium uppercase text-slate-500">Description indent</span>
+                  <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+                    {#each descriptionIndentOptions as option (option.value)}
+                      <button
+                        aria-pressed={menu.designSettings.descriptionIndent === option.value}
+                        class={`min-h-10 rounded-md px-2 py-2 text-sm font-medium transition ${
+                          menu.designSettings.descriptionIndent === option.value
+                            ? 'bg-brand-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                        type="button"
+                        onclick={() => (menu.designSettings.descriptionIndent = option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
             <legend class="text-sm font-semibold text-slate-900">Divider style</legend>
             <div class="mt-3 grid grid-cols-2 rounded-lg border border-slate-300 bg-white p-1 sm:grid-cols-5">
               {#each dividerStyleOptions as option (option.value)}
@@ -5847,6 +6475,99 @@
             </div>
           </div>
 
+          <div class="mb-5 grid gap-4">
+            <label class="block">
+              <span class="text-sm font-medium text-slate-700">Section note</span>
+              <textarea
+                class="mt-2 block min-h-20 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                bind:value={selectedSection.note}
+                placeholder="Optional intro text, availability, or section guidance"
+              ></textarea>
+            </label>
+
+            <div class="grid gap-4 xl:grid-cols-2">
+              <fieldset>
+                <legend class="text-sm font-medium text-slate-700">Heading alignment</legend>
+                <div class="mt-2 grid grid-cols-4 rounded-lg border border-slate-300 bg-white p-1">
+                  {#each sectionHeadingAlignOptions as option (option.value)}
+                    <button
+                      aria-pressed={selectedSection.headingAlign === option.value}
+                      class={`rounded-md px-2 py-2 text-sm font-medium transition ${
+                        selectedSection.headingAlign === option.value
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      type="button"
+                      onclick={() => (selectedSection.headingAlign = option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend class="text-sm font-medium text-slate-700">Item layout</legend>
+                <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1 sm:grid-cols-6">
+                  {#each sectionItemLayoutOptions as option (option.value)}
+                    <button
+                      aria-pressed={selectedSection.itemLayout === option.value}
+                      class={`rounded-md px-2 py-2 text-sm font-medium transition ${
+                        selectedSection.itemLayout === option.value
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      type="button"
+                      onclick={() => (selectedSection.itemLayout = option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend class="text-sm font-medium text-slate-700">Divider override</legend>
+                <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1 sm:grid-cols-5">
+                  {#each dividerStyleOptions as option (option.value)}
+                    <button
+                      aria-pressed={selectedSection.dividerStyle === option.value}
+                      class={`rounded-md px-2 py-2 text-sm font-medium transition ${
+                        selectedSection.dividerStyle === option.value
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      type="button"
+                      onclick={() => (selectedSection.dividerStyle = option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend class="text-sm font-medium text-slate-700">Section background</legend>
+                <div class="mt-2 grid grid-cols-3 rounded-lg border border-slate-300 bg-white p-1">
+                  {#each sectionBackgroundOptions as option (option.value)}
+                    <button
+                      aria-pressed={selectedSection.backgroundStyle === option.value}
+                      class={`rounded-md px-2 py-2 text-sm font-medium transition ${
+                        selectedSection.backgroundStyle === option.value
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      type="button"
+                      onclick={() => (selectedSection.backgroundStyle = option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              </fieldset>
+            </div>
+          </div>
+
           <div class="space-y-4">
             {#if selectedSection.items.length > 0}
               <div class="rounded-lg border border-brand-200 bg-brand-50 p-4" aria-live="polite">
@@ -6310,8 +7031,8 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                 >
                   {#each page.sections as section (section.id)}
                     <section
-                      class="menu-print-section"
-                      style={`--section-column-span: ${Math.min(section.columnSpan, menu.printSettings.columns)};`}
+                      class={`menu-print-section menu-section-bg-${section.backgroundStyle}`}
+                      style={getSectionStyleVariables(section)}
                     >
                       <h4
                         class="menu-print-section-heading mb-4 flex items-center gap-3 text-lg font-semibold uppercase tracking-[0.12em] text-slate-900"
@@ -6327,9 +7048,15 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                         <span class="menu-print-section-rule flex-1"></span>
                       </h4>
 
+                      {#if section.note}
+                        <p class="menu-print-section-note mb-4 text-sm leading-6 text-slate-600">{section.note}</p>
+                      {/if}
+
                       <div class="space-y-4">
                         {#each section.items as item (item.id)}
-                          <article class={`menu-print-item menu-print-item-${section.imageLayout}`}>
+                          <article
+                            class={`menu-print-item menu-print-item-${section.imageLayout} menu-item-layout-${getSectionItemLayout(section)} menu-description-indent-${menu.designSettings.descriptionIndent}`}
+                          >
                             {#if item.imageDataUrl && section.imageLayout === 'banner'}
                               <img
                                 class="menu-print-item-photo menu-print-item-photo-banner"
@@ -6348,12 +7075,51 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                               {/if}
 
                               <div class="menu-print-item-body">
-                                <div class="menu-print-item-row flex items-baseline justify-between gap-4">
-                                  <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
-                                  <p class="menu-print-item-price shrink-0 font-semibold text-slate-900">
-                                    {item.price ? formatPrice(item.price) : ''}
-                                  </p>
-                                </div>
+                                {#if getSectionItemLayout(section) === 'centered'}
+                                  <div class="menu-print-item-centered text-center">
+                                    <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
+                                    {#if item.price}
+                                      <p class="menu-print-item-price mt-1 font-semibold text-slate-900">
+                                        {formatPrice(item.price)}
+                                      </p>
+                                    {/if}
+                                  </div>
+                                {:else if getSectionItemLayout(section) === 'inline'}
+                                  <div class="menu-print-item-inline">
+                                    <h5 class="font-semibold text-slate-950">
+                                      {item.name || 'Untitled item'}
+                                      {#if item.price}
+                                        <span class="menu-print-item-price ml-2 font-semibold text-slate-900">
+                                          {formatPrice(item.price)}
+                                        </span>
+                                      {/if}
+                                    </h5>
+                                  </div>
+                                {:else if getSectionItemLayout(section) === 'leader'}
+                                  <div class="menu-print-item-leader-row flex items-baseline gap-3">
+                                    <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
+                                    <span class="menu-print-price-leader flex-1" aria-hidden="true"></span>
+                                    <p class="menu-print-item-price shrink-0 font-semibold text-slate-900">
+                                      {item.price ? formatPrice(item.price) : ''}
+                                    </p>
+                                  </div>
+                                {:else if getSectionItemLayout(section) === 'stacked'}
+                                  <div class="menu-print-item-stacked">
+                                    <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
+                                    {#if item.price}
+                                      <p class="menu-print-item-price mt-1 font-semibold text-slate-900">
+                                        {formatPrice(item.price)}
+                                      </p>
+                                    {/if}
+                                  </div>
+                                {:else}
+                                  <div class="menu-print-item-row flex items-baseline justify-between gap-4">
+                                    <h5 class="font-semibold text-slate-950">{item.name || 'Untitled item'}</h5>
+                                    <p class="menu-print-item-price shrink-0 font-semibold text-slate-900">
+                                      {item.price ? formatPrice(item.price) : ''}
+                                    </p>
+                                  </div>
+                                {/if}
                                 {#if item.description}
                                   <p class="menu-print-item-description mt-1 max-w-prose text-sm leading-6 text-slate-600">
                                     {item.description}
