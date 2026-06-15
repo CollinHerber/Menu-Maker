@@ -1,6 +1,5 @@
 <script lang="ts">
   import QRCode from 'qrcode';
-  import html2canvas from 'html2canvas';
   import { Button, Modal } from 'flowbite-svelte';
   import {
     ArrowDown,
@@ -43,6 +42,8 @@ import { normalizeImportedDraft, parseDraftFile } from './lib/normalizers';
 import { parseCsvImport, sectionsFromCsvRows, summarizeCsvRows } from './lib/csv';
 import { imageUploadStatusMessage, prepareImageUpload, sanitizeFileName } from './lib/images';
 import { ensureDraftHistoryEntry, formatHistoryTimestamp, hasSavedDraft, loadDraftHistory, loadMenu, saveDraftHistoryEntries } from './lib/persistence';
+import { blobToBytes, canvasToBlob, createPdfBlob, downloadBlob, renderElementToCanvas } from './lib/export';
+import { formatPrice as formatPriceWith, formatAddonPrice as formatAddonPriceWith } from './lib/pricing';
 
   const initialSavedDraftExists = hasSavedDraft();
   const initialMenu = loadMenu();
@@ -544,28 +545,7 @@ import { ensureDraftHistoryEntry, formatHistoryTimestamp, hasSavedDraft, loadDra
     saveMenuSnapshot(snapshot);
   });
 
-  const formatPrice = (price: string) => {
-    const trimmedPrice = price.trim();
-    const numericPrice = Number(trimmedPrice.replace(/[$,]/g, ''));
-
-    if (!trimmedPrice || Number.isNaN(numericPrice)) return trimmedPrice;
-
-    const minimumFractionDigits =
-      menu.designSettings.priceDecimalStyle === 'always' || (!Number.isInteger(numericPrice) && menu.designSettings.priceDecimalStyle === 'auto')
-        ? 2
-        : 0;
-    const maximumFractionDigits = menu.designSettings.priceDecimalStyle === 'trim' ? 2 : Math.max(2, minimumFractionDigits);
-    const formattedPrice = new Intl.NumberFormat('en-US', {
-      currency: 'USD',
-      maximumFractionDigits,
-      minimumFractionDigits,
-      style: menu.designSettings.priceCurrencyStyle === 'symbol' ? 'currency' : 'decimal',
-    }).format(numericPrice);
-
-    return menu.designSettings.priceDecimalStyle === 'trim'
-      ? formattedPrice.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '')
-      : formattedPrice;
-  };
+  const formatPrice = (price: string) => formatPriceWith(price, menu.designSettings);
 
   const formatDesignSetting = (value: number) => `${Math.round(value)}%`;
 
@@ -1758,14 +1738,7 @@ import { ensureDraftHistoryEntry, formatHistoryTimestamp, hasSavedDraft, loadDra
     group.options = group.options.filter((option) => option.id !== optionId);
   };
 
-  const formatAddonPrice = (price: string) => {
-    const trimmed = price.trim();
-    if (!trimmed) return '';
-    const unsigned = trimmed.replace(/^[+-]/, '');
-    const numeric = Number(unsigned.replace(/[$,]/g, ''));
-    if (Number.isNaN(numeric)) return formatPrice(trimmed);
-    return `${trimmed.startsWith('-') ? '-' : '+'}${formatPrice(unsigned)}`;
-  };
+  const formatAddonPrice = (price: string) => formatAddonPriceWith(price, menu.designSettings);
 
   const addCustomBadge = () => {
     const count = menu.customBadges.length + 1;
@@ -1784,18 +1757,6 @@ import { ensureDraftHistoryEntry, formatHistoryTimestamp, hasSavedDraft, loadDra
         }
       });
     });
-  };
-
-  const downloadBlob = (blob: Blob, fileName: string) => {
-    const downloadUrl = URL.createObjectURL(blob);
-    const downloadLink = document.createElement('a');
-
-    downloadLink.href = downloadUrl;
-    downloadLink.download = fileName;
-    document.body.append(downloadLink);
-    downloadLink.click();
-    downloadLink.remove();
-    URL.revokeObjectURL(downloadUrl);
   };
 
   const menuFileBaseName = () => sanitizeFileName(menu.name) || 'menu';
@@ -1817,169 +1778,6 @@ import { ensureDraftHistoryEntry, formatHistoryTimestamp, hasSavedDraft, loadDra
     draftFileStatus = `Exported ${fileName}.`;
   };
 
-  const canvasToBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) =>
-    new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Could not render the menu export.'));
-          }
-        },
-        type,
-        quality,
-      );
-    });
-
-  const blobToBytes = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
-
-  const sanitizeCanvasUnsupportedColors = (value: string) => value.replace(/\b(?:oklch|oklab|lch|lab)\([^)]*\)/g, '#64748b');
-
-  const collectExportStyles = () =>
-    sanitizeCanvasUnsupportedColors(
-      Array.from(document.styleSheets)
-        .map((styleSheet) => {
-          try {
-            return Array.from(styleSheet.cssRules)
-              .map((rule) => rule.cssText)
-              .join('\n');
-          } catch {
-            return '';
-          }
-        })
-        .filter(Boolean)
-        .join('\n'),
-    );
-
-  const renderElementToCanvas = async (element: HTMLElement) => {
-    const rect = element.getBoundingClientRect();
-    const width = Math.ceil(Math.max(rect.width, element.scrollWidth));
-    const height = Math.ceil(Math.max(rect.height, element.scrollHeight));
-
-    if (width <= 0 || height <= 0) {
-      throw new Error('Open the menu preview before exporting.');
-    }
-
-    const exportTargetId = createId();
-    const exportStyles = collectExportStyles();
-    element.dataset.exportTarget = exportTargetId;
-
-    try {
-      return await html2canvas(element, {
-        backgroundColor: '#ffffff',
-        height,
-        logging: false,
-        scale: 2,
-        useCORS: true,
-        width,
-        windowHeight: Math.max(document.documentElement.scrollHeight, height),
-        windowWidth: Math.max(document.documentElement.scrollWidth, width),
-        onclone: (clonedDocument) => {
-          const clonedElement = clonedDocument.querySelector<HTMLElement>(`[data-export-target="${exportTargetId}"]`);
-          const sanitizedStyle = clonedDocument.createElement('style');
-          const overrideStyle = clonedDocument.createElement('style');
-
-          clonedDocument.querySelectorAll('style, link[rel="stylesheet"]').forEach((styleNode) => styleNode.remove());
-          sanitizedStyle.textContent = exportStyles;
-          clonedDocument.head.append(sanitizedStyle);
-
-          overrideStyle.textContent = `
-            html,
-            body {
-              background: #ffffff !important;
-              color: ${activeTextColor} !important;
-            }
-            [data-export-target="${exportTargetId}"] {
-              background-color: ${activeBackgroundColor} !important;
-              color: ${activeTextColor} !important;
-            }
-            [data-export-target="${exportTargetId}"],
-            [data-export-target="${exportTargetId}"] * {
-              border-color: ${activeRuleColor} !important;
-              outline-color: ${activeRuleColor} !important;
-              text-decoration-color: currentColor !important;
-            }
-          `;
-          clonedDocument.head.append(overrideStyle);
-
-          if (!clonedElement) return;
-
-          clonedElement.style.margin = '0';
-          clonedElement.style.transform = 'none';
-          clonedElement.style.boxShadow = 'none';
-          clonedElement.querySelectorAll<HTMLElement>('.menu-print-preview').forEach((pageElement) => {
-            pageElement.style.boxShadow = 'none';
-          });
-        },
-      });
-    } finally {
-      delete element.dataset.exportTarget;
-    }
-  };
-
-  const createPdfBlob = (pages: PdfPageImage[]) => {
-    const encoder = new TextEncoder();
-    const chunks: BlobPart[] = [];
-    const offsets = new Map<number, number>();
-    let byteOffset = 0;
-
-    const append = (chunk: string | Uint8Array) => {
-      const bytes = typeof chunk === 'string' ? encoder.encode(chunk) : chunk;
-      const buffer = new ArrayBuffer(bytes.byteLength);
-      new Uint8Array(buffer).set(bytes);
-
-      chunks.push(buffer);
-      byteOffset += bytes.length;
-    };
-
-    const appendObject = (objectId: number, objectChunks: Array<string | Uint8Array>) => {
-      offsets.set(objectId, byteOffset);
-      append(`${objectId} 0 obj\n`);
-      objectChunks.forEach((chunk) => append(chunk));
-      append('\nendobj\n');
-    };
-
-    const pageObjectIds = pages.map((_, index) => 3 + index * 3);
-    const maxObjectId = 2 + pages.length * 3;
-
-    append('%PDF-1.4\n');
-    appendObject(1, ['<< /Type /Catalog /Pages 2 0 R >>']);
-    appendObject(2, [`<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`]);
-
-    pages.forEach((page, index) => {
-      const pageObjectId = 3 + index * 3;
-      const contentObjectId = pageObjectId + 1;
-      const imageObjectId = pageObjectId + 2;
-      const imageName = `Im${index + 1}`;
-      const content = `q\n${page.pageWidth.toFixed(2)} 0 0 ${page.pageHeight.toFixed(2)} 0 0 cm\n/${imageName} Do\nQ`;
-
-      appendObject(pageObjectId, [
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.pageWidth.toFixed(2)} ${page.pageHeight.toFixed(
-          2,
-        )}] /Resources << /XObject << /${imageName} ${imageObjectId} 0 R >> >> /Contents ${contentObjectId} 0 R >>`,
-      ]);
-      appendObject(contentObjectId, [`<< /Length ${encoder.encode(content).length} >>\nstream\n${content}\nendstream`]);
-      appendObject(imageObjectId, [
-        `<< /Type /XObject /Subtype /Image /Width ${page.imageWidth} /Height ${page.imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.imageBytes.length} >>\nstream\n`,
-        page.imageBytes,
-        '\nendstream',
-      ]);
-    });
-
-    const xrefOffset = byteOffset;
-    append(`xref\n0 ${maxObjectId + 1}\n`);
-    append('0000000000 65535 f \n');
-
-    for (let objectId = 1; objectId <= maxObjectId; objectId += 1) {
-      append(`${String(offsets.get(objectId) ?? 0).padStart(10, '0')} 00000 n \n`);
-    }
-
-    append(`trailer\n<< /Size ${maxObjectId + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
-
-    return new Blob(chunks, { type: 'application/pdf' });
-  };
-
   const exportMenuImage = async (format: ExportImageFormat) => {
     if (!previewElement || isExporting) return;
 
@@ -1988,7 +1786,11 @@ import { ensureDraftHistoryEntry, formatHistoryTimestamp, hasSavedDraft, loadDra
     draftFileError = '';
 
     try {
-      const canvas = await renderElementToCanvas(previewElement);
+      const canvas = await renderElementToCanvas(previewElement, {
+        text: activeTextColor,
+        background: activeBackgroundColor,
+        rule: activeRuleColor,
+      });
       const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
       const extension = format === 'png' ? 'png' : 'jpg';
       const blob = await canvasToBlob(canvas, mimeType, format === 'jpeg' ? 0.92 : undefined);
@@ -2024,7 +1826,11 @@ import { ensureDraftHistoryEntry, formatHistoryTimestamp, hasSavedDraft, loadDra
       const pageHeight = printPageHeight * 72;
       const pages = await Promise.all(
         pageElements.map(async (pageElement) => {
-          const canvas = await renderElementToCanvas(pageElement);
+          const canvas = await renderElementToCanvas(pageElement, {
+            text: activeTextColor,
+            background: activeBackgroundColor,
+            rule: activeRuleColor,
+          });
           const imageBlob = await canvasToBlob(canvas, 'image/jpeg', 0.94);
 
           return {
