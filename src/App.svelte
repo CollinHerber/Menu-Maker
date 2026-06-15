@@ -26,6 +26,7 @@
     RotateCcw,
     Sparkles,
     StickyNote,
+    Tag,
     Trash2,
     Redo2,
     Undo2,
@@ -86,6 +87,7 @@
   type DescriptionIndent = 'none' | 'slight' | 'deep';
   type SectionHeadingAlignChoice = 'preset' | TextAlignChoice;
   type SectionBackgroundStyle = 'none' | 'tint' | 'box';
+  type BadgeColorKey = 'green' | 'amber' | 'red' | 'blue' | 'purple' | 'slate';
 
   type PrintSettings = {
     pageSize: PrintPageSize;
@@ -138,6 +140,13 @@
     descriptionIndent: DescriptionIndent;
   };
 
+  type ItemBadge = {
+    id: string;
+    label: string;
+    shortCode: string;
+    color: BadgeColorKey;
+  };
+
   type MenuItem = {
     id: string;
     name: string;
@@ -146,6 +155,7 @@
     imageDataUrl: string;
     imageName: string;
     imageAlt: string;
+    badgeIds: string[];
   };
 
   type MenuSection = {
@@ -197,6 +207,8 @@
     logoOffsetX: number;
     logoOffsetY: number;
     logoPlacement: LogoPlacement;
+    customBadges: ItemBadge[];
+    showBadgeLegend: boolean;
     activeVariantId: string;
     variants: MenuVariant[];
     sections: MenuSection[];
@@ -437,6 +449,34 @@
     { label: 'None', value: 'none' },
     { label: 'Tint', value: 'tint' },
     { label: 'Box', value: 'box' },
+  ];
+  // Static hex palette (not Tailwind oklch) so badge chips survive html2canvas image/PDF export.
+  const badgeColorStyles: Record<BadgeColorKey, { bg: string; text: string; border: string }> = {
+    green: { bg: '#dcfce7', text: '#166534', border: '#86efac' },
+    amber: { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
+    red: { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5' },
+    blue: { bg: '#dbeafe', text: '#1e40af', border: '#93c5fd' },
+    purple: { bg: '#ede9fe', text: '#5b21b6', border: '#c4b5fd' },
+    slate: { bg: '#e2e8f0', text: '#334155', border: '#cbd5e1' },
+  };
+  const badgeColorOptions: Array<{ label: string; value: BadgeColorKey }> = [
+    { label: 'Green', value: 'green' },
+    { label: 'Amber', value: 'amber' },
+    { label: 'Red', value: 'red' },
+    { label: 'Blue', value: 'blue' },
+    { label: 'Purple', value: 'purple' },
+    { label: 'Slate', value: 'slate' },
+  ];
+  const builtInBadges: ItemBadge[] = [
+    { id: 'vegan', label: 'Vegan', shortCode: 'VG', color: 'green' },
+    { id: 'vegetarian', label: 'Vegetarian', shortCode: 'V', color: 'green' },
+    { id: 'gluten-free', label: 'Gluten-free', shortCode: 'GF', color: 'amber' },
+    { id: 'dairy-free', label: 'Dairy-free', shortCode: 'DF', color: 'blue' },
+    { id: 'nut-free', label: 'Nut-free', shortCode: 'NF', color: 'blue' },
+    { id: 'spicy', label: 'Spicy', shortCode: 'S', color: 'red' },
+    { id: 'popular', label: 'Popular', shortCode: 'POP', color: 'amber' },
+    { id: 'new', label: 'New', shortCode: 'NEW', color: 'purple' },
+    { id: 'chef-special', label: "Chef's special", shortCode: 'CHEF', color: 'purple' },
   ];
   const previewPixelsPerInch = 72;
   const editorPanels: Array<{ id: EditorPanelId; label: string; description: string }> = [
@@ -800,6 +840,7 @@
     imageDataUrl: '',
     imageName: '',
     imageAlt: '',
+    badgeIds: [],
     ...overrides,
   });
 
@@ -829,6 +870,7 @@
       imageDataUrl: item.imageDataUrl,
       imageName: item.imageName,
       imageAlt: item.imageAlt,
+      badgeIds: [...item.badgeIds],
     });
 
   const cloneMenuSection = (section: MenuSection): MenuSection => ({
@@ -852,6 +894,7 @@
     imageDataUrl: item.imageDataUrl,
     imageName: item.imageName,
     imageAlt: item.imageAlt,
+    badgeIds: [...(item.badgeIds ?? [])],
   });
 
   const copyMenuSection = (section: MenuSection, preserveId = true): MenuSection => ({
@@ -962,6 +1005,8 @@
       logoOffsetX: 0,
       logoOffsetY: 0,
       logoPlacement: 'above-eyebrow',
+      customBadges: [],
+      showBadgeLegend: false,
       activeVariantId: variantId,
       variants: [],
       sections: [
@@ -2012,6 +2057,8 @@
       logoOffsetX: 0,
       logoOffsetY: 0,
       logoPlacement: 'above-eyebrow',
+      customBadges: [],
+      showBadgeLegend: false,
       activeVariantId: variantId,
       variants: [],
       sections: template.sections.map((section) => ({
@@ -2162,6 +2209,41 @@
     return Array.from(sectionCounts, ([section, itemCount]) => ({ section, itemCount }));
   };
 
+  const normalizeBadgeColor = (value: unknown): BadgeColorKey =>
+    typeof value === 'string' && value in badgeColorStyles ? (value as BadgeColorKey) : 'slate';
+
+  const normalizeBadgeIds = (value: unknown): string[] =>
+    Array.isArray(value)
+      ? Array.from(new Set(value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)))
+      : [];
+
+  const normalizeCustomBadges = (value: unknown): ItemBadge[] => {
+    if (!Array.isArray(value)) return [];
+
+    const badges: ItemBadge[] = [];
+    const seenIds = new Set(builtInBadges.map((badge) => badge.id));
+
+    value.forEach((entry) => {
+      if (!isRecord(entry)) return;
+
+      const label = normalizeTextField(entry.label).trim();
+      if (!label) return;
+
+      let id = normalizeTextField(entry.id) || createId();
+      while (seenIds.has(id)) id = createId();
+      seenIds.add(id);
+
+      badges.push({
+        id,
+        label,
+        shortCode: normalizeTextField(entry.shortCode).trim().slice(0, 6) || label.slice(0, 2).toUpperCase(),
+        color: normalizeBadgeColor(entry.color),
+      });
+    });
+
+    return badges;
+  };
+
   const normalizeImportedItem = (value: unknown, itemIndex: number, sectionIndex: number): MenuItem => {
     if (!isRecord(value)) {
       throw new Error(`Item ${itemIndex + 1} in section ${sectionIndex + 1} is invalid.`);
@@ -2175,6 +2257,7 @@
       imageDataUrl: normalizeTextField(value.imageDataUrl),
       imageName: normalizeTextField(value.imageName),
       imageAlt: normalizeTextField(value.imageAlt),
+      badgeIds: normalizeBadgeIds(value.badgeIds),
     };
   };
 
@@ -2253,6 +2336,8 @@
       logoOffsetX: normalizeNumericSetting(value.logoOffsetX, 0, -50, 50),
       logoOffsetY: normalizeNumericSetting(value.logoOffsetY, 0, -50, 50),
       logoPlacement: normalizeLogoPlacement(value.logoPlacement),
+      customBadges: normalizeCustomBadges(value.customBadges),
+      showBadgeLegend: value.showBadgeLegend === true,
       activeVariantId: normalizeTextField(value.activeVariantId),
       variants: normalizedVariants,
       stylePresetId: normalizeStylePresetId(value.stylePresetId),
@@ -2506,8 +2591,24 @@
   );
   let hasFooterDetails = $derived(menu.footerNote.trim().length > 0 || menu.disclaimer.trim().length > 0);
   let hasQrCodeUrl = $derived(menu.qrCodeUrl.trim().length > 0);
-  let hasMenuFooter = $derived(hasFooterDetails || hasQrCodeUrl);
+  let availableBadges = $derived<ItemBadge[]>([...builtInBadges, ...menu.customBadges]);
+  let badgeLookup = $derived(new Map(availableBadges.map((badge) => [badge.id, badge])));
+  let activeBadges = $derived(
+    availableBadges.filter((badge) =>
+      menu.sections.some((section) => section.items.some((item) => item.badgeIds.includes(badge.id))),
+    ),
+  );
+  let hasBadgeLegend = $derived(menu.showBadgeLegend && activeBadges.length > 0);
+  let hasMenuFooter = $derived(hasFooterDetails || hasQrCodeUrl || hasBadgeLegend);
   let qrCodeCaption = $derived(menu.qrCodeLabel.trim() || 'Scan for more');
+
+  const resolveItemBadges = (item: MenuItem): ItemBadge[] =>
+    item.badgeIds.map((id) => badgeLookup.get(id)).filter((badge): badge is ItemBadge => badge !== undefined);
+
+  const badgeChipStyle = (badge: ItemBadge) => {
+    const colors = badgeColorStyles[badge.color];
+    return `background:${colors.bg};color:${colors.text};border:1px solid ${colors.border};`;
+  };
   let csvPreviewSections = $derived(summarizeCsvRows(csvPreviewRows));
   let csvPreviewItemCount = $derived(csvPreviewRows.length);
   let activeStylePreset = $derived(
@@ -3275,6 +3376,7 @@
     if (menu.footerNote.trim()) height += 34;
     if (menu.disclaimer.trim()) height += 40;
     if (hasQrCodeUrl) height = Math.max(height, 168);
+    if (hasBadgeLegend) height += 28 + Math.ceil(activeBadges.length / 4) * 22;
 
     return height;
   };
@@ -4037,6 +4139,31 @@
     item.imageDataUrl = '';
     item.imageName = '';
     item.imageAlt = '';
+  };
+
+  const toggleItemBadge = (item: MenuItem, badgeId: string) => {
+    item.badgeIds = item.badgeIds.includes(badgeId)
+      ? item.badgeIds.filter((id) => id !== badgeId)
+      : [...item.badgeIds, badgeId];
+  };
+
+  const addCustomBadge = () => {
+    const count = menu.customBadges.length + 1;
+    menu.customBadges = [
+      ...menu.customBadges,
+      { id: createId(), label: `Custom ${count}`, shortCode: '', color: 'slate' },
+    ];
+  };
+
+  const removeCustomBadge = (badgeId: string) => {
+    menu.customBadges = menu.customBadges.filter((badge) => badge.id !== badgeId);
+    menu.sections.forEach((section) => {
+      section.items.forEach((item) => {
+        if (item.badgeIds.includes(badgeId)) {
+          item.badgeIds = item.badgeIds.filter((id) => id !== badgeId);
+        }
+      });
+    });
   };
 
   const downloadBlob = (blob: Blob, fileName: string) => {
@@ -6269,6 +6396,99 @@
               <p class="mt-3 text-sm text-red-700" role="alert">{qrCodeError}</p>
             {/if}
           </div>
+
+          <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+            <div class="mb-4 flex items-start gap-3">
+              <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-brand-700 shadow-sm">
+                <Tag class="h-5 w-5" />
+              </span>
+              <div>
+                <h3 class="text-base font-semibold text-slate-950">Item badges</h3>
+                <p class="mt-1 text-sm text-slate-600">
+                  Label items as vegan, spicy, popular, and more. Apply badges to each item in the Items tab.
+                </p>
+              </div>
+            </div>
+
+            <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+              <input
+                class="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                type="checkbox"
+                bind:checked={menu.showBadgeLegend}
+              />
+              <span>
+                <span class="block text-sm font-medium text-slate-800">Show badge legend</span>
+                <span class="mt-0.5 block text-xs leading-5 text-slate-500">
+                  Prints a key of every badge in use at the bottom of the menu.
+                </span>
+              </span>
+            </label>
+
+            <div class="mt-4">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <span class="text-sm font-medium text-slate-700">Custom badges</span>
+                <Button color="light" onclick={addCustomBadge}>
+                  <Plus class="mr-2 h-4 w-4" />
+                  Add badge
+                </Button>
+              </div>
+
+              {#if menu.customBadges.length === 0}
+                <p class="mt-2 text-xs leading-5 text-slate-500">
+                  Built-in badges are always available. Add your own with a label, short code, and color.
+                </p>
+              {:else}
+                <div class="mt-3 grid gap-3">
+                  {#each menu.customBadges as badge (badge.id)}
+                    <div
+                      class="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-[auto_minmax(0,1fr)_6rem_8rem_auto] sm:items-end"
+                    >
+                      <div class="flex items-center justify-center sm:pb-2">
+                        <span class="menu-badge-chip" style={badgeChipStyle(badge)}>
+                          {badge.shortCode || badge.label.slice(0, 2)}
+                        </span>
+                      </div>
+
+                      <label class="block">
+                        <span class="text-xs font-medium text-slate-600">Label</span>
+                        <input
+                          class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                          bind:value={badge.label}
+                          placeholder="Badge name"
+                        />
+                      </label>
+
+                      <label class="block">
+                        <span class="text-xs font-medium text-slate-600">Code</span>
+                        <input
+                          class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                          bind:value={badge.shortCode}
+                          maxlength="6"
+                          placeholder="VG"
+                        />
+                      </label>
+
+                      <label class="block">
+                        <span class="text-xs font-medium text-slate-600">Color</span>
+                        <select
+                          class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                          bind:value={badge.color}
+                        >
+                          {#each badgeColorOptions as option (option.value)}
+                            <option value={option.value}>{option.label}</option>
+                          {/each}
+                        </select>
+                      </label>
+
+                      <Button color="light" aria-label="Delete badge" title="Delete badge" onclick={() => removeCustomBadge(badge.id)}>
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -6827,6 +7047,36 @@
                       </div>
                     {/if}
                   </div>
+
+                  <div class="rounded-lg border border-slate-200 bg-white p-4">
+                    <div class="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <Tag class="h-4 w-4 text-brand-700" />
+                      Badges
+                    </div>
+                    <p class="mt-1 text-xs leading-5 text-slate-500">
+                      Tap to label this item. Manage the badge library and legend in the Details tab.
+                    </p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      {#each availableBadges as badge (badge.id)}
+                        {@const selected = item.badgeIds.includes(badge.id)}
+                        <button
+                          aria-pressed={selected}
+                          class={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                            selected
+                              ? 'border-brand-500 bg-brand-50 text-brand-900 shadow-sm'
+                              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                          }`}
+                          type="button"
+                          onclick={() => toggleItemBadge(item, badge.id)}
+                        >
+                          <span class="menu-badge-chip" style={badgeChipStyle(badge)}>
+                            {badge.shortCode || badge.label.slice(0, 2)}
+                          </span>
+                          {badge.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -7054,6 +7304,7 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
 
                       <div class="space-y-4">
                         {#each section.items as item (item.id)}
+                          {@const itemBadges = resolveItemBadges(item)}
                           <article
                             class={`menu-print-item menu-print-item-${section.imageLayout} menu-item-layout-${getSectionItemLayout(section)} menu-description-indent-${menu.designSettings.descriptionIndent}`}
                           >
@@ -7120,6 +7371,19 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                                     </p>
                                   </div>
                                 {/if}
+                                {#if itemBadges.length > 0}
+                                  <div
+                                    class={`menu-print-item-badges mt-1.5 flex flex-wrap gap-1 ${
+                                      getSectionItemLayout(section) === 'centered' ? 'justify-center' : ''
+                                    }`}
+                                  >
+                                    {#each itemBadges as badge (badge.id)}
+                                      <span class="menu-badge-chip" style={badgeChipStyle(badge)} title={badge.label}>
+                                        {badge.shortCode || badge.label}
+                                      </span>
+                                    {/each}
+                                  </div>
+                                {/if}
                                 {#if item.description}
                                   <p class="menu-print-item-description mt-1 max-w-prose text-sm leading-6 text-slate-600">
                                     {item.description}
@@ -7148,6 +7412,20 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
 
                 {#if page.showFooter}
                   <div class="menu-print-footer mt-8 border-t border-slate-300 pt-5">
+                    {#if hasBadgeLegend}
+                      <div class="menu-print-legend mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs leading-5 text-slate-600">
+                        {#each activeBadges as badge (badge.id)}
+                          <span class="inline-flex items-center gap-1.5">
+                            <span class="menu-badge-chip" style={badgeChipStyle(badge)}>
+                              {badge.shortCode || badge.label.slice(0, 2)}
+                            </span>
+                            <span>{badge.label}</span>
+                          </span>
+                        {/each}
+                      </div>
+                    {/if}
+
+                    {#if hasFooterDetails || hasQrCodeUrl}
                     <div class={hasQrCodeUrl ? 'grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start' : 'grid gap-4'}>
                       {#if hasFooterDetails}
                         <div class="space-y-3 text-sm leading-6 text-slate-600">
@@ -7177,6 +7455,7 @@ Pepperoni Pizza | Mozzarella and pepperoni | 14.99`}
                         </div>
                       {/if}
                     </div>
+                    {/if}
                   </div>
                 {/if}
               </div>

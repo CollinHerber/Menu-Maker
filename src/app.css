@@ -424,6 +424,21 @@ textarea {
   font-weight: var(--menu-price-weight, 600);
 }
 
+.menu-badge-chip {
+  align-items: center;
+  border-radius: 9999px;
+  display: inline-flex;
+  font-size: 0.625rem;
+  font-weight: 700;
+  justify-content: center;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  min-width: 1.5rem;
+  padding: 0.2rem 0.45rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .menu-print-preview .menu-print-item-description,
 .menu-print-preview .menu-print-section-note,
 .menu-print-preview .menu-print-empty-section,
